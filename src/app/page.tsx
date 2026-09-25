@@ -1,69 +1,20 @@
-import Image from "next/image";
-
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="site-shell">
+      <header className="site-header">
+        <a className="brand" href="#top" aria-label="Northstar home"><span className="brand-mark">N</span><span>northstar</span></a>
+        <nav className="main-nav" aria-label="Main navigation"><a href="#about">About</a><a href="#services">Services</a><a href="#portfolio">Portfolio</a><a href="#contact">Contact</a></nav>
+        <a className="header-action" href="/login">Staff portal <span aria-hidden="true">↗</span></a>
+      </header>
+      <main id="top">
+        <section className="hero-section"><div className="hero-copy"><p className="eyebrow">Business operations, rethought</p><h1>Clarity for the work <em>behind</em> the work.</h1><p className="hero-text">Northstar brings your customers, finances, and day-to-day operations into one quietly powerful platform.</p><div className="hero-actions"><a className="button button-primary" href="#contact">Start a conversation <span aria-hidden="true">→</span></a><a className="text-link" href="#services">Explore services <span aria-hidden="true">↓</span></a></div></div><div className="hero-art" aria-label="Abstract illustration of connected business operations"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit orbit-three" /><div className="hero-core"><span>north<br />star</span></div><div className="orbit-label label-top">Strategy <span>01</span></div><div className="orbit-label label-right">Systems <span>02</span></div><div className="orbit-label label-bottom">Momentum <span>03</span></div></div></section>
+        <section className="signal-strip" aria-label="Northstar capabilities"><span>One source of truth</span><i /> <span>Built for momentum</span><i /> <span>Human by design</span><i /> <span>Ready for what&apos;s next</span></section>
+        <section className="intro-section" id="about"><p className="eyebrow">The Northstar approach</p><div className="intro-grid"><h2>Make the complex feel <span>possible.</span></h2><p>Good operations should make your best work easier to do. We pair practical systems thinking with a sharp understanding of people, so your business can move with confidence instead of friction.</p></div></section>
+        <section className="services-section" id="services"><div className="section-heading"><div><p className="eyebrow">What we do</p><h2>Built around your <span>next move.</span></h2></div><span className="section-index">01 — 04</span></div><div className="service-grid"><article className="service-card service-card-featured"><span className="card-number">01</span><h3>Operational<br />strategy</h3><p>Find the signal in the noise and build a way forward your whole team can own.</p><a href="#contact" aria-label="Learn about operational strategy">↗</a></article><article className="service-card"><span className="card-number">02</span><h3>Systems<br />design</h3><p>Turn scattered processes into simple, connected systems that scale with you.</p><a href="#contact" aria-label="Learn about systems design">↗</a></article><article className="service-card"><span className="card-number">03</span><h3>Financial<br />control</h3><p>See the shape of your business clearly, from first quote to final receipt.</p><a href="#contact" aria-label="Learn about financial control">↗</a></article><article className="service-card"><span className="card-number">04</span><h3>Team<br />enablement</h3><p>Give capable people the context, tools, and room to do exceptional work.</p><a href="#contact" aria-label="Learn about team enablement">↗</a></article></div></section>
+        <section className="portfolio-section" id="portfolio"><div className="section-heading"><div><p className="eyebrow">Illustrative work</p><h2>Small shifts. <span>Real change.</span></h2></div><a className="text-link" href="#contact">Explore examples <span aria-hidden="true">↗</span></a></div><div className="project-grid"><article className="project-card project-aurora"><div><span>Concept / Retail</span><h3>Aurora House</h3></div><span className="project-arrow">↗</span></article><article className="project-card project-field"><div><span>Concept / Professional services</span><h3>Fieldwork Studio</h3></div><span className="project-arrow">↗</span></article></div></section>
+        <section className="contact-section" id="contact"><div><p className="eyebrow">Have a good problem?</p><h2>Let&apos;s find<br /><em>the way through.</em></h2></div><span className="button button-light">Contact details to be confirmed</span></section>
       </main>
+      <footer className="site-footer"><a className="brand" href="#top"><span className="brand-mark">N</span><span>northstar</span></a><span>© 2026 Northstar Systems</span><span>Built for the long view.</span></footer>
     </div>
   );
 }

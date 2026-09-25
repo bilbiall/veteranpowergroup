@@ -1,0 +1,412 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum DocumentType {
+  QUOTATION
+  INVOICE
+  RECEIPT
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum ReceiptStatus {
+  ISSUED
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  MOBILE_MONEY
+}
+
+enum EtimsStatus {
+  PENDING
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+}
+
+enum EtimsEnvironment {
+  TEST
+  PRODUCTION
+}
+
+enum MediaCollection {
+  GENERAL
+  PORTFOLIO
+  BACKGROUND_SLIDESHOW
+}
+
+model User {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  roles     UserRole[]
+  documents Document[] @relation("DocumentOwner")
+  media     Media[]
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  summary    String
+  reason     String?
+  metadata   Json?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  description String?
+
+  roles RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+  payments  Payment[]
+  media     Media[]
+}
+
+model Document {
+  id     String       @id @default(cuid())
+  number String       @unique
+  type   DocumentType
+
+  quotationStatus QuotationStatus?
+  invoiceStatus   InvoiceStatus?
+  receiptStatus   ReceiptStatus?
+
+  subtotal Float @default(0)
+  tax      Float @default(0)
+  total    Float @default(0)
+
+  customerId       String
+  ownerId          String?
+  sourceDocumentId String?
+  companyId        Int     @default(1)
+  sequenceYear     Int
+  sequenceValue    Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer        @relation(fields: [customerId], references: [id])
+  company  CompanySettings @relation(fields: [companyId], references: [id])
+  owner    User?           @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  sourceDocument Document? @relation("DocumentConversions", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  derivedDocuments Document[]     @relation("DocumentConversions")
+  items            DocumentItem[]
+
+  payments Payment[]
+  payment  Payment?  @relation("PaymentReceipt")
+
+  media Media[]
+  etims EtimsTransaction[]
+
+  @@unique([companyId, type, sequenceYear, sequenceValue])
+  @@index([customerId])
+  @@index([ownerId])
+  @@index([sourceDocumentId])
+  @@index([type])
+}
+
+model DocumentItem {
+  id String @id @default(cuid())
+
+  documentId  String
+  description String
+
+  quantity  Float @default(1)
+  unitPrice Float @default(0)
+  discount  Float @default(0)
+  taxRate   Float @default(0)
+
+  amount    Float @default(0)
+  taxAmount Float @default(0)
+  total     Float @default(0)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([documentId, sortOrder])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  amount    Float
+  method    PaymentMethod
+  reference String?
+  paidAt    DateTime      @default(now())
+
+  customerId String
+  documentId String
+  receiptId  String @unique
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  receipt Document @relation("PaymentReceipt", fields: [receiptId], references: [id])
+
+  @@index([customerId])
+  @@index([documentId])
+  @@index([paidAt])
+}
+
+model CompanySettings {
+  id        Int      @id @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile           CompanyProfile?
+  branding          Branding?
+  documents         DocumentSettings?
+  websiteAppearance WebsiteAppearance?
+  documentRecords   Document[]
+  numberSequences   DocumentNumberSequence[]
+
+  media Media[]
+}
+
+model DocumentNumberSequence {
+  id        Int             @id @default(autoincrement())
+  companyId Int
+  type      DocumentType
+  year      Int
+  prefix    String
+  nextValue Int             @default(1)
+  updatedAt DateTime        @updatedAt
+  company   CompanySettings @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, type, year])
+}
+
+model CompanyProfile {
+  id        Int @id @default(1)
+  companyId Int @unique
+
+  name           String
+  address        String?
+  phone          String?
+  email          String?
+  taxInformation String?
+
+  company CompanySettings @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Branding {
+  id        Int @id @default(1)
+  companyId Int @unique
+
+  logoMediaId      String? @unique
+  watermarkMediaId String? @unique
+
+  company CompanySettings @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  logo Media? @relation("CompanyLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+
+  watermark Media? @relation("CompanyWatermark", fields: [watermarkMediaId], references: [id], onDelete: SetNull)
+}
+
+model DocumentSettings {
+  id        Int @id @default(1)
+  companyId Int @unique
+
+  quotePrefix   String @default("QUO")
+  invoicePrefix String @default("INV")
+  receiptPrefix String @default("REC")
+
+  defaultTaxRate    Float @default(0)
+  quoteValidityDays Int     @default(30)
+
+  terms  String?
+  footer String?
+
+  company CompanySettings @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model WebsiteAppearance {
+  id        Int @id @default(1)
+  companyId Int @unique
+
+  primaryColor    String @default("#202A27")
+  secondaryColor  String @default("#D7F36A")
+  backgroundColor String @default("#F6F5F0")
+
+  backgroundMediaId String? @unique
+  slideshowEnabled  Boolean @default(true)
+
+  overlayColor   String?
+  overlayOpacity Float @default(0)
+
+  company CompanySettings @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  background Media? @relation("AppearanceBackground", fields: [backgroundMediaId], references: [id], onDelete: SetNull)
+
+  media Media[] @relation("WebsiteAppearanceMedia")
+}
+
+model Media {
+  id String @id @default(cuid())
+
+  filename    String
+  url         String
+  mimeType    String?
+  size        Int?
+  title       String?
+  description String?
+  altText     String?
+  width       Int?
+  height      Int?
+  duration    Int?
+
+  collection MediaCollection @default(GENERAL)
+  caption    String?
+  sortOrder  Int             @default(0)
+  isActive   Boolean         @default(true)
+
+  customerId          String?
+  documentId          String?
+  companySettingsId   Int?
+  websiteAppearanceId Int?
+  uploadedById        String?
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  company CompanySettings? @relation(fields: [companySettingsId], references: [id], onDelete: SetNull)
+
+  websiteAppearance WebsiteAppearance? @relation("WebsiteAppearanceMedia", fields: [websiteAppearanceId], references: [id], onDelete: SetNull)
+
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  logoFor       Branding?          @relation("CompanyLogo")
+  watermarkFor  Branding?          @relation("CompanyWatermark")
+  backgroundFor WebsiteAppearance? @relation("AppearanceBackground")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([documentId])
+  @@index([companySettingsId])
+  @@index([websiteAppearanceId])
+  @@index([collection])
+}
+
+model EtimsTransaction {
+  id String @id @default(cuid())
+
+  invoiceNumber      String
+  externalIdentifier String?
+  environment        EtimsEnvironment @default(PRODUCTION)
+
+  submissionStatus EtimsStatus @default(PENDING)
+  responseCode     String?
+  responseMessage  String?
+  requestPayload   Json?
+  responsePayload  Json?
+  failureReason    String?
+  attemptCount     Int         @default(0)
+
+  submittedAt   DateTime?
+  acceptedAt    DateTime?
+  lastAttemptAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  receiptId String
+  receipt   Document @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([submissionStatus])
+  @@index([invoiceNumber])
+  @@index([receiptId])
+}

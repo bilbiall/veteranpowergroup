@@ -1,5 +1,39 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## App conventions
+
+- Environment variables are parsed in `src/lib/env.ts`; keep local values in `.env` and update `.env.example` when adding configuration.
+- Import the singleton Prisma client from `src/lib/prisma.ts`. Do not construct `PrismaClient` inside route handlers or server actions.
+- Use `AppError` for expected failures and `runServerAction` for typed server-action results.
+- Wrap route handlers with `withApiErrorHandling`, return data with `apiSuccess`, and let `apiFailure` normalize unexpected errors.
+- Use `logger` for structured JSON logs. Never log passwords, connection strings, tokens, or full request bodies.
+
+## Local prototype
+
+The staff area uses a temporary, single-account prototype sign-in. It is not production authentication and does not implement account recovery, user management, or role enforcement. Do not expose this prototype publicly or use real customer data.
+
+1. Copy `.env.example` to `.env` and set a private `PROTOTYPE_SESSION_SECRET` with at least 32 characters. The local development fallback account is `admin@northstar.local` / `LocalDemoOnly2026!`; change it in `.env` if needed.
+2. Initialize the local SQLite database with `npm run db:migrate`.
+3. Add fictional starter data with `npm run db:seed`. The seed command is idempotent and uses the configured prototype email.
+4. Start the app with `npm run dev` and open `/login`.
+
+Local database files are ignored by Git. Currency, tax, document numbering, company details, roles, and statuses are placeholders until business requirements are confirmed. PostgreSQL and production identity integration are not configured.
+
+Open a saved quotation, invoice, or receipt with **View & download**. Its detail page offers Word (`.docx`), Excel (`.xlsx`), and PDF downloads generated from the saved record. Export endpoints require a signed-in prototype session.
+
+Useful checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm run db:format
+npm run db:validate
+npm run db:generate
+npm run db:migrate
+```
+
+The health check is available at `/api/health` and verifies the database connection.
+
 ## Getting Started
 
 First, run the development server:
