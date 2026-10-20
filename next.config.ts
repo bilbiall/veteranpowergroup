@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "100mb",
+    },
+  },
+  distDir: process.env.APP_SURFACE === "portal"
+    ? ".next-portal"
+    : process.env.APP_SURFACE === "website"
+      ? ".next-website"
+      : ".next",
 };
 
 export default nextConfig;

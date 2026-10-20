@@ -12,7 +12,7 @@ const contentTypes: Record<ExportFormat, string> = {
   pdf: "application/pdf",
 };
 
-export const GET = withApiErrorHandling(async (request: NextRequest, context: RouteContext<"/api/documents/[id]/export">) => {
+export const GET = withApiErrorHandling(async (request: NextRequest, context: { params: Promise<{ id: string }> }) => {
   const session = await getPrototypeSession();
   if (!session) return Response.json({ error: "Authentication required" }, { status: 401 });
 

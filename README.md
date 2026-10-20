@@ -10,12 +10,16 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Local prototype
 
-The staff area uses a temporary, single-account prototype sign-in. It is not production authentication and does not implement account recovery, user management, or role enforcement. Do not expose this prototype publicly or use real customer data.
+The staff area uses temporary prototype authentication. The configured administrator can create individual staff accounts in **Settings → Staff accounts**, reset their passwords, and disable or re-enable access. Additional staff passwords are stored as salted scrypt hashes; the bootstrap administrator credential stays in the ignored `.env` file. The prototype does not include account recovery or fine-grained permissions: all active staff can use the same workspace modules. Do not expose this prototype publicly or use real customer data.
 
-1. Copy `.env.example` to `.env` and set a private `PROTOTYPE_SESSION_SECRET` with at least 32 characters. The local development fallback account is `admin@northstar.local` / `LocalDemoOnly2026!`; change it in `.env` if needed.
+1. Copy `.env.example` to `.env` and set a private administrator email, a password with at least 8 characters, and a unique session secret with at least 32 characters. The app has no built-in staff credentials or session secret; startup fails if any are missing or invalid. Use a strong administrator password and keep this prototype local.
 2. Initialize the local SQLite database with `npm run db:migrate`.
 3. Add fictional starter data with `npm run db:seed`. The seed command is idempotent and uses the configured prototype email.
-4. Start the app with `npm run dev` and open `/login`.
+4. Start both services with `npm run dev:both`. The public website runs at `http://localhost:3002`; the separate staff portal runs at `http://localhost:3001`.
+
+For production, build and start the services independently with `npm run build:website` / `npm run start:website` and `npm run build:portal` / `npm run start:portal`. Set `PUBLIC_SITE_URL` and `STAFF_PORTAL_URL` in `.env` to their deployed addresses. Each service only serves its own website or portal routes and redirects cross-surface requests to the other address.
+
+The administrator configured in `.env` is bootstrapped by `npm run db:seed`. Sign in with that account to manage staff accounts in the settings page. Give each staff member their temporary password through a secure channel; they should use an agreed password manager or your organization’s process to store it.
 
 Local database files are ignored by Git. Currency, tax, document numbering, company details, roles, and statuses are placeholders until business requirements are confirmed. PostgreSQL and production identity integration are not configured.
 
@@ -34,6 +38,8 @@ npm run db:migrate
 
 The health check is available at `/api/health` and verifies the database connection.
 
+The public site has separate Power, Solar, and Borehole solution pages, an enquiry form that creates staff follow-ups in **Prospects**, and a live portfolio populated from published staff entries. Website analytics record page paths and referrer host names; they do not store visitor IP addresses. In the staff portal, **Reports → Download all** (also available in the sidebar) exports Reports, Findings, Analytics, Prospects, Receipts, Quotations, and Invoices into one authenticated Excel workbook.
+
 ## Getting Started
 
 First, run the development server:
@@ -48,7 +54,7 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3002](http://localhost:3002) for the public website, or [http://localhost:3001](http://localhost:3001) for the staff portal.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

@@ -2,13 +2,17 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const year = new Date().getFullYear();
-const adminEmail = (process.env.PROTOTYPE_ADMIN_EMAIL || "admin@northstar.local").toLowerCase();
+if (!process.env.PROTOTYPE_ADMIN_EMAIL) {
+  throw new Error("Set PROTOTYPE_ADMIN_EMAIL in .env before seeding the database.");
+}
+
+const adminEmail = process.env.PROTOTYPE_ADMIN_EMAIL.toLowerCase();
 
 async function main() {
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    create: { id: "prototype-admin", name: "Northstar Demo Admin", email: adminEmail },
-    update: { name: "Northstar Demo Admin" },
+    create: { id: "prototype-admin", name: "Veteran Demo Admin", email: adminEmail },
+    update: { name: "Veteran Demo Admin" },
   });
 
   const role = await prisma.role.upsert({ where: { name: "Prototype administrator" }, create: { name: "Prototype administrator", description: "Local prototype role; replace with agreed production access rules." }, update: {} });
@@ -21,7 +25,7 @@ async function main() {
   }
 
   await prisma.companySettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-  await prisma.companyProfile.upsert({ where: { companyId: 1 }, create: { companyId: 1, name: "Northstar Prototype", email: "hello@example.invalid", address: "Sample address — replace with company details" }, update: {} });
+  await prisma.companyProfile.upsert({ where: { companyId: 1 }, create: { companyId: 1, name: "Veteran Power Solutions Limited", email: "veteranpowergroup@gmail.com", phone: "+254707734670", address: "Shem Plaza, Lusaka Road, Industrial Area, Nairobi, Opposite ASL" }, update: { name: "Veteran Power Solutions Limited", email: "veteranpowergroup@gmail.com", phone: "+254707734670", address: "Shem Plaza, Lusaka Road, Industrial Area, Nairobi, Opposite ASL" } });
   await prisma.documentSettings.upsert({ where: { companyId: 1 }, create: { companyId: 1, quotePrefix: "QUO", invoicePrefix: "INV", receiptPrefix: "REC", defaultTaxRate: 0, quoteValidityDays: 30, terms: "Prototype terms — replace before use." }, update: {} });
   await prisma.branding.upsert({ where: { companyId: 1 }, create: { companyId: 1 }, update: {} });
   await prisma.websiteAppearance.upsert({ where: { companyId: 1 }, create: { companyId: 1 }, update: {} });

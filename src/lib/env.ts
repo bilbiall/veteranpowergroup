@@ -8,26 +8,13 @@ const envSchema = z.object({
     .refine((value) => value.startsWith("file:"), {
       message: "DATABASE_URL must be a SQLite file URL for this prototype",
     }),
-  PROTOTYPE_ADMIN_EMAIL: z.string().email().default("admin@northstar.local"),
-  PROTOTYPE_ADMIN_PASSWORD: z.string().min(12).default("LocalDemoOnly2026!"),
-  PROTOTYPE_SESSION_SECRET: z.string().min(32).default("local-prototype-session-secret-change-before-deploy"),
+  PROTOTYPE_ADMIN_EMAIL: z.string().email(),
+  PROTOTYPE_ADMIN_PASSWORD: z.string().min(8),
+  PROTOTYPE_SESSION_SECRET: z.string().min(32),
 }).superRefine((value, context) => {
-  if (value.NODE_ENV === "production") {
-    for (const key of ["PROTOTYPE_ADMIN_EMAIL", "PROTOTYPE_ADMIN_PASSWORD", "PROTOTYPE_SESSION_SECRET"] as const) {
-      if (!process.env[key]) {
-        context.addIssue({ code: "custom", path: [key], message: `${key} must be explicitly configured in production` });
-      }
-    }
-    if (value.PROTOTYPE_SESSION_SECRET.startsWith("replace-with-") || value.PROTOTYPE_SESSION_SECRET === "local-prototype-session-secret-change-before-deploy") {
-      context.addIssue({ code: "custom", path: ["PROTOTYPE_SESSION_SECRET"], message: "Set a unique session secret in production" });
-    }
-    if (value.PROTOTYPE_ADMIN_EMAIL === "admin@northstar.local" || value.PROTOTYPE_ADMIN_PASSWORD === "LocalDemoOnly2026!") {
-      context.addIssue({ code: "custom", path: ["PROTOTYPE_ADMIN_EMAIL"], message: "Replace the local prototype credentials before production" });
-    }
+  if (value.PROTOTYPE_SESSION_SECRET.startsWith("replace-with-")) {
+    context.addIssue({ code: "custom", path: ["PROTOTYPE_SESSION_SECRET"], message: "Set a unique session secret" });
   }
 });
 
-export const env = envSchema.parse({
-  NODE_ENV: process.env.NODE_ENV,
-  DATABASE_URL: process.env.DATABASE_URL,
-});
+export const env = envSchema.parse(process.env);

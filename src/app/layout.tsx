@@ -13,8 +13,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Northstar | Operations, made clear",
-  description: "A calm, connected platform for modern business operations.",
+  title: "About Veteran Power Solutions Limited | We light your world",
+  description: "Learn about Veteran Power Solutions Limited and our locally available Power, Solar, and Borehole products and services.",
+  icons: { icon: "/veteran-brand-icon.png" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -25,6 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{const saved=localStorage.getItem("veteran-color-scheme");const systemDark=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=saved||(systemDark?"dark":"light")}catch{}` }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
