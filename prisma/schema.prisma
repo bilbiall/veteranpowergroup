@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserStatus {
@@ -307,6 +309,9 @@ model CompanyProfile {
   phone          String?
   email          String?
   taxInformation String?
+
+  whatsappNumber  String?
+  whatsappMessage String?
 
   company CompanySettings @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

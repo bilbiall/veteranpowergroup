@@ -1,6 +1,12 @@
-import { createStaffAccount, resetStaffPassword, setStaffStatus } from "@/app/dashboard/actions";
+import { createStaffAccount, resetStaffPassword, setStaffStatus, updateWhatsappSettings } from "@/app/dashboard/actions";
 import { prisma } from "@/lib/prisma";
 import { isPrototypeAdministrator, requirePrototypeSession } from "@/lib/prototype-auth";
+import { defaultWhatsappMessage } from "@/lib/whatsapp";
+
+const whatsappMessages: Record<string, string> = {
+  saved: "WhatsApp settings saved. The button on the website is updated.",
+  invalid: "Enter a valid phone number, for example 0707 734 670 or +254 707 734 670.",
+};
 
 const staffMessages: Record<string, string> = {
   created: "Staff account created. Share its initial password securely.",
@@ -15,6 +21,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/dashboa
   const params = await searchParams;
   const staffMessageKey = Array.isArray(params.staff) ? params.staff[0] : params.staff;
   const staffMessage = staffMessageKey ? staffMessages[staffMessageKey] : undefined;
+  const whatsappKey = Array.isArray(params.whatsapp) ? params.whatsapp[0] : params.whatsapp;
+  const whatsappFeedback = whatsappKey ? whatsappMessages[whatsappKey] : undefined;
   const canManageStaff = await isPrototypeAdministrator(session.userId);
   const [company, staffUsers] = await Promise.all([
     prisma.companySettings.findUnique({ where: { id: 1 }, include: { profile: true, documents: true, websiteAppearance: true } }),
@@ -31,6 +39,16 @@ export default async function SettingsPage({ searchParams }: PageProps<"/dashboa
       <div className="panel-heading"><div><p className="eyebrow">Company profile</p><h3>{company?.profile?.name ?? "Not configured"}</h3></div></div>
       <dl className="settings-list"><div><dt>Address</dt><dd>{company?.profile?.address ?? "Not configured"}</dd></div><div><dt>Email</dt><dd>{company?.profile?.email ?? "Not configured"}</dd></div><div><dt>Phone</dt><dd>{company?.profile?.phone ?? "Not configured"}</dd></div><div><dt>Quotation prefix</dt><dd>{company?.documents?.quotePrefix ?? "Not configured"}</dd></div><div><dt>Default tax rate</dt><dd>{company?.documents?.defaultTaxRate ?? 0}%</dd></div><div><dt>Quotation validity</dt><dd>{company?.documents?.quoteValidityDays ?? "Not configured"} days</dd></div><div><dt>Currency</dt><dd>Awaiting requirements</dd></div></dl>
     </section>
+
+    {canManageStaff && <section className="panel table-panel">
+      <div className="panel-heading"><div><p className="eyebrow">Website</p><h3>WhatsApp button</h3><p className="dashboard-note">A floating button on the public website opens WhatsApp to this number with the preset message. Leave the number empty to hide the button.</p></div><span className="prototype-badge">Administrator</span></div>
+      {whatsappFeedback && <p className={`staff-feedback${whatsappKey === "invalid" ? " is-error" : ""}`} role="status">{whatsappFeedback}</p>}
+      <form action={updateWhatsappSettings} className="prototype-form whatsapp-settings-form">
+        <label>WhatsApp number<input name="number" type="tel" inputMode="tel" maxLength={40} defaultValue={company?.profile?.whatsappNumber ? `+${company.profile.whatsappNumber}` : ""} placeholder="+254 707 734 670" /><span>Numbers starting with 0 are treated as Kenyan (+254).</span></label>
+        <label className="whatsapp-message-field">Preset message<textarea name="message" maxLength={500} defaultValue={company?.profile?.whatsappMessage ?? defaultWhatsappMessage} /></label>
+        <button className="dashboard-button" type="submit">Save WhatsApp settings</button>
+      </form>
+    </section>}
 
     {canManageStaff && <section className="panel table-panel staff-management">
       <div className="panel-heading"><div><p className="eyebrow">Access</p><h3>Staff accounts</h3><p className="dashboard-note">Create individual sign-ins, reset passwords, or disable access.</p></div><span className="prototype-badge">Administrator</span></div>

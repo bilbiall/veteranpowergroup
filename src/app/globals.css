@@ -549,3 +549,8 @@ td { color: var(--ink); }
   .about-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
   .hero-contact-panel { width: 100%; }
 }
+.whatsapp-float { align-items: center; background: #25d366; border-radius: 50%; bottom: 22px; box-shadow: 0 6px 18px rgba(0,0,0,.28); color: #fff; display: flex; height: 58px; justify-content: center; position: fixed; right: 22px; transition: transform .2s ease; width: 58px; z-index: 50; }
+.whatsapp-float:hover { transform: scale(1.08); }
+.whatsapp-float:focus-visible { outline: 3px solid var(--lime); outline-offset: 3px; }
+.whatsapp-settings-form textarea { background: #fbfcfa; border: 1px solid var(--line); border-radius: 0; color: var(--ink); font: inherit; font-size: 13px; min-height: 84px; padding: 9px 11px; width: 100%; }
+.whatsapp-settings-form .whatsapp-message-field { grid-column: 1 / -1; }

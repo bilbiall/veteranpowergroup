@@ -1,0 +1,8 @@
+All pics
+Invoice
+deploy
+deploy-db
+*.db
+.run-both*.log
+prisma/sqlite-export.json
+.env*

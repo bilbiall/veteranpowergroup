@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSession } from "@/lib/prototype-auth";
 import { getSchoolPaymentPlan } from "@/lib/school-payment-plans";
+import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 
 const staffAccountSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -465,4 +466,26 @@ export async function setPortfolioProjectPublished(formData: FormData) {
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
   await prisma.portfolioProject.update({ where: { id: parsed.data.id }, data: { isPublished: parsed.data.isPublished === "true" } });
   redirect("/dashboard/portfolio?updated=1");
+}
+
+const whatsappSchema = z.object({
+  number: z.string().trim().max(40),
+  message: z.string().trim().max(500),
+});
+
+export async function updateWhatsappSettings(formData: FormData) {
+  const actor = await requirePrototypeAdminSession();
+  const parsed = whatsappSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/dashboard/settings?whatsapp=invalid");
+
+  // An empty number switches the floating button off.
+  const number = parsed.data.number === "" ? null : normalizeWhatsappNumber(parsed.data.number);
+  if (parsed.data.number !== "" && !number) redirect("/dashboard/settings?whatsapp=invalid");
+
+  await prisma.companyProfile.update({ where: { companyId: 1 }, data: { whatsappNumber: number, whatsappMessage: parsed.data.message || null } });
+  await prisma.auditLog.create({
+    data: { actorId: actor.userId, action: "updated", entityType: "CompanyProfile", entityId: "1", summary: number ? `Set WhatsApp number to ${number}` : "Turned off the WhatsApp button" },
+  });
+  revalidatePath("/", "layout");
+  redirect("/dashboard/settings?whatsapp=saved");
 }

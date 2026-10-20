@@ -3,6 +3,7 @@ import { PublicSiteHeader } from "@/components/public-site-header";
 import { CompanyBrand } from "@/components/company-brand";
 import { PublicMediaGallery } from "@/components/public-media-gallery";
 import { WebsiteVisitTracker } from "@/components/website-visit-tracker";
+import { WhatsAppButton } from "@/components/whatsapp-button";
 import { submitWebsiteEnquiry } from "./actions";
 import { prisma } from "@/lib/prisma";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
@@ -48,6 +49,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   return (
     <div className="site-shell site-shell-home">
       <WebsiteVisitTracker />
+      <WhatsAppButton />
       <PublicSiteHeader />
       <main id="top">
         <section className="hero-section company-hero about-hero" id="about">

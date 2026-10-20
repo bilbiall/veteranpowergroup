@@ -46,3 +46,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# deploy packages
+/deploy/
+prisma/sqlite-export.json
+.local-pg/

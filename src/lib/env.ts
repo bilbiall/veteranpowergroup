@@ -5,8 +5,8 @@ const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1, "DATABASE_URL is required")
-    .refine((value) => value.startsWith("file:"), {
-      message: "DATABASE_URL must be a SQLite file URL for this prototype",
+    .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+      message: "DATABASE_URL must be a PostgreSQL connection string",
     }),
   PROTOTYPE_ADMIN_EMAIL: z.string().email(),
   PROTOTYPE_ADMIN_PASSWORD: z.string().min(8),

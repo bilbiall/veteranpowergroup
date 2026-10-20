@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PublicSiteHeader } from "@/components/public-site-header";
 import { CompanyBrand } from "@/components/company-brand";
 import { WebsiteVisitTracker } from "@/components/website-visit-tracker";
+import { WhatsAppButton } from "@/components/whatsapp-button";
 import { PublicMediaGallery } from "@/components/public-media-gallery";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
 import { prisma } from "@/lib/prisma";
@@ -21,6 +22,7 @@ export default async function SolutionPage({ params }: PageProps<"/solutions/[sl
 
   return <div className="site-shell">
     <WebsiteVisitTracker />
+    <WhatsAppButton />
     <PublicSiteHeader />
     <main className="solution-main">
       <p className="eyebrow">Veteran Power Solutions Limited · Products and services</p><h1>{solution.title}</h1><p className="solution-intro">{solution.intro}</p>
