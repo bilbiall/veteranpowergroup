@@ -21,7 +21,7 @@ const productAreas = [
   ["Inverter Solutions", "Hybrid, off-grid, and grid-tie inverter options for different system configurations.", "/solutions/power"],
   ["Generator Solutions", "Power-generation equipment for an additional or alternative source of electricity.", "/solutions/power"],
   ["Borehole Solutions", "Products and equipment to support water-access requirements.", "/solutions/borehole"],
-  ["Related Accessories", "Supporting components to bring a power solution together and keep it working as intended.", "/solutions/power"],
+  ["Electrical Solutions", "Electrical wiring, installation, distribution and protection for homes, businesses and other applications.", "/solutions/power"],
 ];
 
 const useCases = [
@@ -60,7 +60,7 @@ const businessSchema = (address?: string | null) => ({
   hasOfferCatalog: {
     "@type": "OfferCatalog",
     name: "Power, solar and borehole solutions",
-    itemListElement: ["Solar power system installation", "Off-grid solar systems", "Hybrid, off-grid and grid-tie inverters", "Gel, tubular and lithium batteries", "Water pumps and borehole solutions", "Electrical wiring and installation", "Generators and backup power"].map((name) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name } })),
+    itemListElement: ["Solar solutions and installation", "Off-grid solar systems", "Power solutions", "Electrical solutions, wiring and installation", "Inverter solutions", "Battery solutions", "Water pumps and borehole solutions", "Generators and backup power"].map((name) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name } })),
   },
 });
 

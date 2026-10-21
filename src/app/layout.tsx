@@ -17,9 +17,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: "Solar, Borehole & Electrical Solutions in Nairobi, Kenya | Veteran Power Solutions",
-    template: `%s | ${siteName}`,
+    template: "%s | Veteran Power Solutions",
   },
-  description: "Solar power, borehole and water pump systems, inverters, batteries, generators, electrical wiring and off-grid installation in Nairobi and across Kenya. Supply and installation since 2018.",
+  description: "Veteran Power Solutions provides solar, borehole, electrical, battery and inverter solutions in Nairobi and across Kenya, including water pumps, wiring and backup power.",
   applicationName: siteName,
   keywords: siteKeywords,
   alternates: { canonical: "/" },
