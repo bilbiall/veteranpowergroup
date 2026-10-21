@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { CompanyBrand } from "@/components/company-brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { publicSiteUrl } from "@/lib/surface-urls";
 import { login } from "./actions";
+
+export const metadata: Metadata = { title: "Staff login", robots: { index: false, follow: false } };
 
 export default async function Login({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;

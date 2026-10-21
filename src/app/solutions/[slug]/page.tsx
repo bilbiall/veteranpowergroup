@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PublicSiteHeader } from "@/components/public-site-header";
@@ -8,19 +9,44 @@ import { PublicMediaGallery } from "@/components/public-media-gallery";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
 import { prisma } from "@/lib/prisma";
 import { solutions, type SolutionSlug } from "@/lib/solutions";
+import { jsonLd, siteName, siteUrl } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: PageProps<"/solutions/[slug]">): Promise<Metadata> {
+  const { slug } = await params;
+  if (!Object.hasOwn(solutions, slug)) return {};
+  const solution = solutions[slug as SolutionSlug];
+  return {
+    title: solution.seoTitle,
+    description: solution.seoDescription,
+    keywords: [...solution.keywords],
+    alternates: { canonical: `/solutions/${slug}` },
+    openGraph: { type: "website", url: `/solutions/${slug}`, title: `${solution.seoTitle} | ${siteName}`, description: solution.seoDescription, images: ["/veteran-renewable-hero.png"] },
+  };
+}
 
 export default async function SolutionPage({ params }: PageProps<"/solutions/[slug]">) {
   const { slug } = await params;
   if (!Object.hasOwn(solutions, slug)) notFound();
   const solution = solutions[slug as SolutionSlug];
+  const serviceSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: solution.title,
+    description: solution.seoDescription,
+    url: `${siteUrl}/solutions/${slug}`,
+    areaServed: { "@type": "Country", name: "Kenya" },
+    provider: { "@type": "LocalBusiness", name: siteName, url: siteUrl },
+    hasOfferCatalog: { "@type": "OfferCatalog", name: `${solution.title} products and services`, itemListElement: [...solution.products, ...solution.services].map((item) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: item } })) },
+  };
   const [media, company] = await Promise.all([
     listPublicMedia(mediaFolders[slug as SolutionSlug]),
     prisma.companyProfile.findUnique({ where: { companyId: 1 }, select: { address: true } }),
   ]);
 
   return <div className="site-shell">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(serviceSchema) }} />
     <WebsiteVisitTracker />
     <WhatsAppButton />
     <PublicSiteHeader />

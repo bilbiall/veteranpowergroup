@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { siteKeywords, siteName, siteUrl } from "@/lib/seo";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -13,9 +14,32 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "About Veteran Power Solutions Limited | We light your world",
-  description: "Learn about Veteran Power Solutions Limited and our locally available Power, Solar, and Borehole products and services.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Solar, Borehole & Electrical Solutions in Nairobi, Kenya | Veteran Power Solutions",
+    template: `%s | ${siteName}`,
+  },
+  description: "Solar power, borehole and water pump systems, inverters, batteries, generators, electrical wiring and off-grid installation in Nairobi and across Kenya. Supply and installation since 2018.",
+  applicationName: siteName,
+  keywords: siteKeywords,
+  alternates: { canonical: "/" },
   icons: { icon: "/veteran-brand-icon.png" },
+  openGraph: {
+    type: "website",
+    siteName,
+    locale: "en_KE",
+    url: "/",
+    title: "Solar, Borehole & Electrical Solutions in Kenya | Veteran Power Solutions",
+    description: "Solar, batteries, inverters, water pumps, boreholes, electrical wiring and off-grid systems, supplied and installed across Kenya.",
+    images: [{ url: "/veteran-renewable-hero.png", alt: "Veteran Power Solutions solar and power installations" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Solar, Borehole & Electrical Solutions in Kenya | Veteran Power Solutions",
+    description: "Solar, batteries, inverters, water pumps, boreholes, electrical wiring and off-grid systems across Kenya.",
+    images: ["/veteran-renewable-hero.png"],
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -7,6 +7,7 @@ import { WhatsAppButton } from "@/components/whatsapp-button";
 import { submitWebsiteEnquiry } from "./actions";
 import { prisma } from "@/lib/prisma";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
+import { business, jsonLd, siteName, siteUrl } from "@/lib/seo";
 
 const solutions = [
   ["01", "Power Solutions", "Power products and services for homes, businesses, farms, and institutions.", "/solutions/power"],
@@ -40,6 +41,29 @@ const reasons = [
 
 const serviceOptions = ["Power Solutions", "Solar Solutions", "Borehole Solutions"];
 
+const businessSchema = (address?: string | null) => ({
+  "@context": "https://schema.org",
+  "@type": ["LocalBusiness", "ElectricalContractor"],
+  "@id": `${siteUrl}/#business`,
+  name: siteName,
+  description: "Supply and installation of solar power systems, batteries, inverters, generators, water pumps, borehole solutions and electrical wiring in Nairobi and across Kenya.",
+  url: siteUrl,
+  logo: business.logo,
+  image: business.image,
+  telephone: business.phone,
+  email: business.email,
+  foundingDate: "2018",
+  slogan: "We light your world",
+  address: { "@type": "PostalAddress", streetAddress: address || business.streetAddress, addressLocality: business.locality, addressCountry: business.country },
+  areaServed: [{ "@type": "City", name: "Nairobi" }, { "@type": "Country", name: "Kenya" }],
+  sameAs: [business.facebook],
+  hasOfferCatalog: {
+    "@type": "OfferCatalog",
+    name: "Power, solar and borehole solutions",
+    itemListElement: ["Solar power system installation", "Off-grid solar systems", "Hybrid, off-grid and grid-tie inverters", "Gel, tubular and lithium batteries", "Water pumps and borehole solutions", "Electrical wiring and installation", "Generators and backup power"].map((name) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name } })),
+  },
+});
+
 export default async function Home({ searchParams }: PageProps<"/">) {
   const [params, company, aboutMedia] = await Promise.all([
     searchParams,
@@ -48,12 +72,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   ]);
   return (
     <div className="site-shell site-shell-home">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(businessSchema(company?.address)) }} />
       <WebsiteVisitTracker />
       <WhatsAppButton />
       <PublicSiteHeader />
       <main id="top">
         <section className="hero-section company-hero about-hero" id="about">
-          <div className="hero-copy"><p className="eyebrow">About Veteran Power Solutions Limited · Serving Kenya since 2018</p><h1>Practical water, solar, borehole, power and irrigation solutions for <em>your needs.</em></h1><p className="hero-proof">Solar · Batteries · Inverters · Generators · Borehole Solutions</p><div className="hero-actions"><a className="button button-primary" href="#contact">Discuss your requirements <span aria-hidden="true">→</span></a></div></div>
+          <div className="hero-copy"><p className="eyebrow">About Veteran Power Solutions Limited · Serving Kenya since 2018</p><h1>Solar, borehole, electrical and off-grid power solutions in Kenya for <em>your needs.</em></h1><p className="hero-proof">Solar · Batteries · Inverters · Water Pumps · Electrical Wiring · Generators · Borehole Solutions</p><div className="hero-actions"><a className="button button-primary" href="#contact">Discuss your requirements <span aria-hidden="true">→</span></a></div></div>
           <aside className="hero-contact-panel" aria-labelledby="hero-contact-title"><p className="eyebrow">Let&apos;s discuss your power requirements</p><h2 id="hero-contact-title">Tell us what<br /><em>you need.</em></h2><p className="hero-contact-prompt">Share what you need to power, your current setup, and the challenge you are experiencing. Our team can help you identify a suitable solution.</p><div className="hero-contact-details"><p>Shem Plaza, Lusaka Road, Industrial Area, Nairobi,<br />Opposite ASL</p><a href="mailto:veteranpowergroup@gmail.com">veteranpowergroup@gmail.com</a><a href="tel:+254707734670">+254 707 734 670</a></div></aside>
         </section>
         <section className="intro-section about-detail" aria-label="About Veteran Power Solutions Limited">

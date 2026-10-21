@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicSiteHeader } from "@/components/public-site-header";
 import { CompanyBrand } from "@/components/company-brand";
@@ -8,6 +9,12 @@ import { listPublicMedia, mediaFolders } from "@/lib/public-media";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Solar, Borehole & Electrical Projects in Kenya",
+  description: "Completed solar installations, borehole and water pump systems, inverter and battery setups and electrical projects by Veteran Power Solutions across Kenya.",
+  alternates: { canonical: "/portfolio" },
+};
 
 export default async function PortfolioPage() {
   const [projects, powerMedia, solarMedia, boreholeMedia, projectReports, company] = await Promise.all([
