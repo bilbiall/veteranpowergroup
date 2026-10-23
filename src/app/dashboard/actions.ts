@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSession } from "@/lib/prototype-auth";
 import { getSchoolPaymentPlan } from "@/lib/school-payment-plans";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
+import { isPortfolioMediaType } from "@/lib/portfolio-media";
 
 const staffAccountSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -88,6 +89,33 @@ const portfolioProjectSchema = z.object({
   isPublished: z.string().optional(),
 });
 const portfolioProjectStatusSchema = z.object({ id: z.string().min(1), isPublished: z.enum(["true", "false"]) });
+const portfolioProjectMediaSchema = z.object({ id: z.string().min(1) });
+
+const maxPortfolioMediaFiles = 10;
+const maxPortfolioMediaBytes = 3 * 1024 * 1024;
+
+async function preparePortfolioMedia(formData: FormData, uploadedById: string) {
+  const values = formData.getAll("media");
+  if (values.some((value) => typeof value !== "string" && !(value instanceof File))) return null;
+  const files = values.filter((value): value is File => value instanceof File && value.size > 0);
+  if (files.length > maxPortfolioMediaFiles || files.reduce((total, file) => total + file.size, 0) > maxPortfolioMediaBytes) return null;
+  if (files.some((file) => !isPortfolioMediaType(file.type.toLowerCase()))) return null;
+
+  return Promise.all(files.map(async (file) => {
+    const filename = file.name.replace(/[\\/]/g, "_").slice(0, 255) || "project-media";
+    const contents = Buffer.from(await file.arrayBuffer()).toString("base64");
+    return {
+      filename,
+      url: `data:${file.type.toLowerCase()};base64,${contents}`,
+      mimeType: file.type.toLowerCase(),
+      size: file.size,
+      title: filename,
+      altText: filename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+      collection: "PORTFOLIO" as const,
+      uploadedById,
+    };
+  }));
+}
 
 export async function createCustomer(formData: FormData) {
   const session = await requirePrototypeSession();
@@ -446,6 +474,8 @@ export async function createPortfolioProject(formData: FormData) {
   const session = await requirePrototypeSession();
   const parsed = portfolioProjectSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
+  const media = await preparePortfolioMedia(formData, session.userId);
+  if (!media) redirect("/dashboard/portfolio?error=media");
   const project = await prisma.portfolioProject.create({
     data: {
       title: parsed.data.title,
@@ -454,10 +484,30 @@ export async function createPortfolioProject(formData: FormData) {
       summary: parsed.data.summary,
       completionYear: typeof parsed.data.completionYear === "number" ? parsed.data.completionYear : null,
       isPublished: parsed.data.isPublished === "on",
+      ...(media.length ? { media: { create: media } } : {}),
     },
   });
   await prisma.auditLog.create({ data: { actorId: session.userId, action: "created", entityType: "PortfolioProject", entityId: project.id, summary: `Added portfolio project ${project.title}` } });
+  revalidatePath("/portfolio");
   redirect("/dashboard/portfolio?created=1");
+}
+
+export async function addPortfolioProjectMedia(formData: FormData) {
+  const session = await requirePrototypeSession();
+  const parsed = portfolioProjectMediaSchema.safeParse({ id: formData.get("id") });
+  if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
+  const media = await preparePortfolioMedia(formData, session.userId);
+  if (!media?.length) redirect("/dashboard/portfolio?error=media");
+
+  const project = await prisma.portfolioProject.update({
+    where: { id: parsed.data.id },
+    data: { media: { create: media } },
+    select: { id: true, title: true },
+  });
+  await prisma.auditLog.create({ data: { actorId: session.userId, action: "updated", entityType: "PortfolioProject", entityId: project.id, summary: `Added media to portfolio project ${project.title}` } });
+  revalidatePath("/portfolio");
+  revalidatePath("/dashboard/portfolio");
+  redirect("/dashboard/portfolio?media=added");
 }
 
 export async function setPortfolioProjectPublished(formData: FormData) {
@@ -465,6 +515,7 @@ export async function setPortfolioProjectPublished(formData: FormData) {
   const parsed = portfolioProjectStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
   await prisma.portfolioProject.update({ where: { id: parsed.data.id }, data: { isPublished: parsed.data.isPublished === "true" } });
+  revalidatePath("/portfolio");
   redirect("/dashboard/portfolio?updated=1");
 }
 

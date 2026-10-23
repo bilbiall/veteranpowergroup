@@ -389,6 +389,7 @@ model Media {
 
   customerId          String?
   documentId          String?
+  portfolioProjectId  String?
   companySettingsId   Int?
   websiteAppearanceId Int?
   uploadedById        String?
@@ -396,6 +397,8 @@ model Media {
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  portfolioProject PortfolioProject? @relation(fields: [portfolioProjectId], references: [id], onDelete: Cascade)
 
   company CompanySettings? @relation(fields: [companySettingsId], references: [id], onDelete: SetNull)
 
@@ -412,6 +415,7 @@ model Media {
 
   @@index([customerId])
   @@index([documentId])
+  @@index([portfolioProjectId])
   @@index([companySettingsId])
   @@index([websiteAppearanceId])
   @@index([collection])
@@ -493,6 +497,8 @@ model PortfolioProject {
   isPublished   Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  media Media[]
 
   @@index([isPublished, createdAt])
 }

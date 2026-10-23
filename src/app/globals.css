@@ -209,6 +209,19 @@ td { color: var(--ink); }
 .live-project-card h2 { font-size: 34px; font-weight: 500; margin-top: 65px; }
 .live-project-card p { color: #d2d9d4; font-size: 14px; line-height: 1.6; max-width: 560px; }
 .live-project-location { color: #c2d285; font-size: 11px; }
+.portfolio-project-media { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-top: 22px; }
+.portfolio-project-media-item { min-width: 0; }
+.portfolio-project-media-item > a:first-child { display: block; }
+.portfolio-project-media-item img,
+.portfolio-project-media-item video { aspect-ratio: 4 / 3; background: #17231e; display: block; object-fit: cover; width: 100%; }
+.portfolio-project-media-item audio { display: block; max-width: 100%; width: 260px; }
+.portfolio-project-media-item figcaption { color: #d2d9d4; font-size: 11px; line-height: 1.4; margin-top: 6px; overflow-wrap: anywhere; }
+.portfolio-project-document { align-items: center; border: 1px solid #64736a; color: var(--lime); display: flex; min-height: 100px; padding: 12px; }
+.portfolio-media-upload-form { display: grid; gap: 8px; min-width: 190px; }
+.portfolio-media-upload-form label { color: var(--muted); display: grid; font-size: 11px; gap: 6px; }
+.portfolio-media-upload-form input[type="file"] { font-size: 11px; max-width: 245px; }
+.portfolio-media-upload-form small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.portfolio-media-upload-form .dashboard-button { justify-self: start; margin: 0; min-height: 36px; padding: 8px 12px; }
 .public-media-section { margin-top: 70px; }
 .public-media-heading { align-items: end; display: flex; gap: 28px; justify-content: space-between; margin-bottom: 24px; }
 .public-media-heading h2 { font-size: clamp(26px, 3vw, 38px); font-weight: 500; }
