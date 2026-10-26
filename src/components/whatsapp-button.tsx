@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { getCompanyProfileSummary } from "@/lib/company-profile";
 import { defaultWhatsappMessage, whatsappLink } from "@/lib/whatsapp";
 
 export async function WhatsAppButton() {
-  const profile = await prisma.companyProfile.findUnique({ where: { companyId: 1 }, select: { whatsappNumber: true, whatsappMessage: true } });
+  const profile = await getCompanyProfileSummary();
   if (!profile?.whatsappNumber) return null;
 
   return <a className="whatsapp-float" href={whatsappLink(profile.whatsappNumber, profile.whatsappMessage || defaultWhatsappMessage)} target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp">

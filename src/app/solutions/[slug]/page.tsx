@@ -6,8 +6,8 @@ import { CompanyBrand } from "@/components/company-brand";
 import { WebsiteVisitTracker } from "@/components/website-visit-tracker";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { PublicMediaGallery } from "@/components/public-media-gallery";
+import { getCompanyProfileSummary } from "@/lib/company-profile";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
-import { prisma } from "@/lib/prisma";
 import { solutions, type SolutionSlug } from "@/lib/solutions";
 import { jsonLd, siteName, siteUrl } from "@/lib/seo";
 
@@ -42,7 +42,7 @@ export default async function SolutionPage({ params }: PageProps<"/solutions/[sl
   };
   const [media, company] = await Promise.all([
     listPublicMedia(mediaFolders[slug as SolutionSlug]),
-    prisma.companyProfile.findUnique({ where: { companyId: 1 }, select: { address: true } }),
+    getCompanyProfileSummary(),
   ]);
 
   return <div className="site-shell">

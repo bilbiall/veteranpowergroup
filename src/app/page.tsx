@@ -5,7 +5,7 @@ import { PublicMediaGallery } from "@/components/public-media-gallery";
 import { WebsiteVisitTracker } from "@/components/website-visit-tracker";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { submitWebsiteEnquiry } from "./actions";
-import { prisma } from "@/lib/prisma";
+import { getCompanyProfileSummary } from "@/lib/company-profile";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
 import { business, jsonLd, siteName, siteUrl } from "@/lib/seo";
 
@@ -67,7 +67,7 @@ const businessSchema = (address?: string | null) => ({
 export default async function Home({ searchParams }: PageProps<"/">) {
   const [params, company, aboutMedia] = await Promise.all([
     searchParams,
-    prisma.companyProfile.findUnique({ where: { companyId: 1 }, select: { address: true } }),
+    getCompanyProfileSummary(),
     listPublicMedia(mediaFolders.about),
   ]);
   return (

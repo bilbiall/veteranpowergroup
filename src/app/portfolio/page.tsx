@@ -6,6 +6,7 @@ import { CompanyBrand } from "@/components/company-brand";
 import { WebsiteVisitTracker } from "@/components/website-visit-tracker";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { PublicMediaGallery } from "@/components/public-media-gallery";
+import { getCompanyProfileSummary } from "@/lib/company-profile";
 import { listPublicMedia, mediaFolders } from "@/lib/public-media";
 import { getPortfolioMediaKind } from "@/lib/portfolio-media";
 import { prisma } from "@/lib/prisma";
@@ -24,12 +25,12 @@ export default async function PortfolioPage() {
       where: { isPublished: true },
       orderBy: [{ completionYear: "desc" }, { createdAt: "desc" }],
       include: { media: { select: { id: true, filename: true, mimeType: true, altText: true }, orderBy: { createdAt: "asc" } } },
-    }),
+    }).catch(() => []),
     listPublicMedia(mediaFolders.power),
     listPublicMedia(mediaFolders.solar),
     listPublicMedia(mediaFolders.borehole),
     listPublicMedia(mediaFolders.reports),
-    prisma.companyProfile.findUnique({ where: { companyId: 1 }, select: { address: true } }),
+    getCompanyProfileSummary(),
   ]);
   return <div className="site-shell">
     <WebsiteVisitTracker />
