@@ -11,7 +11,7 @@ const adminEmail = process.env.PROTOTYPE_ADMIN_EMAIL.toLowerCase();
 async function main() {
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    create: { id: "prototype-admin", name: "Veteran Demo Admin", email: adminEmail },
+    create: { name: "Veteran Demo Admin", email: adminEmail },
     update: { name: "Veteran Demo Admin" },
   });
 

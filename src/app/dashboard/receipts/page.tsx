@@ -3,6 +3,7 @@ import { createReceipt } from "@/app/dashboard/actions";
 import { requirePrototypeSession } from "@/lib/prototype-auth";
 import Link from "next/link";
 import { formatDocumentCurrency } from "@/lib/document-export-data";
+import CustomerSelectEnhancer from "@/components/customer-select-enhancer";
 
 export default async function ReceiptsPage({ searchParams }: PageProps<"/dashboard/receipts">) {
   const params = await searchParams;
@@ -16,10 +17,11 @@ export default async function ReceiptsPage({ searchParams }: PageProps<"/dashboa
     ? ["ISSUED", "PARTIALLY_PAID"].includes(source.invoiceStatus ?? "") && source.total - source.payments.reduce((sum, payment) => sum + payment.amount, 0) > 0.005
     : source.derivedDocuments.length === 0 && source.total - source.payments.reduce((sum, payment) => sum + payment.amount, 0) > 0.005);
   const selectedSource = availableSources.find((source) => source.id === params.sourceDocumentId);
+  const sourceCustomerIds = Object.fromEntries(availableSources.map((source) => [source.id, source.customerId]));
   const requestedSourceUnavailable = Boolean(params.sourceDocumentId && !selectedSource);
   const received = selectedSource?.payments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
   const remaining = selectedSource ? Math.max(0, selectedSource.total - received) : 0;
-  return <main className="dashboard-main"><header className="page-title"><div><p className="eyebrow">Finance</p><h1>Receipts</h1><p className="dashboard-note">Create receipts from invoice or quotation payments, or record a standalone receipt.</p></div><span className="prototype-badge">{receipts.length} records</span></header>
+  return <main className="dashboard-main"><CustomerSelectEnhancer formSelector={'form:has(select[name="sourceDocumentId"])'} sourceCustomerIds={sourceCustomerIds} /><header className="page-title"><div><p className="eyebrow">Finance</p><h1>Receipts</h1><p className="dashboard-note">Create receipts from invoice or quotation payments, or record a standalone receipt.</p></div><span className="prototype-badge">{receipts.length} records</span></header>
     {params.error === "invalid" && <p className="notice notice-error" role="alert">Check the customer, amount, description, payment method, and reference.</p>}
     {params.error === "setup" && <p className="notice notice-error" role="alert">Receipt creation is unavailable until the staff account and company settings are configured.</p>}
     {params.error === "source" && <p className="notice notice-error" role="alert">Choose an invoice or quotation that can be used to create a receipt.</p>}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import DocumentLineItemEnhancer from "@/components/document-line-item-enhancer";
+import CustomerSelectEnhancer from "@/components/customer-select-enhancer";
 import ReceiptDetailsEditor from "@/components/receipt-details-editor";
 import { createInstallmentInvoices, issueInvoice, recordInvoicePayment, updateQuotationOrInvoice } from "@/app/dashboard/actions";
 import { documentStatus, documentTypeLabel, findExportDocument, formatDocumentCurrency, formatDocumentNumber, receiptPaymentSummary } from "@/lib/document-export-data";
@@ -28,6 +29,7 @@ export default async function DocumentDetailPage({ params, searchParams }: PageP
   const terms = document.terms ?? document.company.documents?.terms ?? "";
   return <main className="dashboard-main">
     <DocumentLineItemEnhancer documentId={document.id} documentType={document.type} items={document.items} />
+    <CustomerSelectEnhancer formSelector=".document-edit-form" />
     <p className="document-back"><Link href={`/dashboard/${document.type.toLowerCase()}s`}>← Back to {documentTypeLabel(document.type).toLowerCase()}s</Link></p>
     <header className="document-detail-heading"><div><p className="eyebrow">{documentTypeLabel(document.type)} · {documentStatus(document)}</p><h1>{document.number}</h1><p className="dashboard-note">Created {document.createdAt.toLocaleDateString("en")} · Prototype document</p></div><span className="prototype-badge">Saved record</span></header>
     {query.invoices === "created" && <p className="notice" role="status">Three installment invoices have been created as drafts. Issue each invoice after review.</p>}

@@ -37,12 +37,16 @@ const customerSchema = z.object({
   company: z.string().trim().max(120).optional(),
 });
 
-const quotationSchema = z.object({
+const customerSelectionFields = {
   customerId: z.string().optional(),
-  newCustomerName: z.string().trim().max(120).optional(),
+  newCustomerName: z.string().trim().min(2).max(120).optional(),
   newCustomerCompany: z.string().trim().max(120).optional(),
   newCustomerEmail: z.union([z.literal(""), z.email()]).optional(),
   newCustomerPhone: z.string().trim().max(40).optional(),
+};
+const customerSelectionSchema = z.object(customerSelectionFields);
+const quotationSchema = z.object({
+  ...customerSelectionFields,
   description: z.string().trim().min(2).max(250),
   quantity: z.coerce.number().positive().max(100000),
   unitPrice: z.coerce.number().nonnegative().max(100000000),
@@ -61,7 +65,13 @@ const schoolPlanSchema = z.object({
 });
 const documentIdSchema = z.object({ documentId: z.string().min(1) });
 const paymentSchema = z.object({ invoiceId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
-const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), customerId: z.string().optional(), amount: z.coerce.number().positive().max(100000000), currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional(), description: z.string().trim().min(2).max(250) });
+const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), ...customerSelectionFields, amount: z.coerce.number().positive().max(100000000), currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional(), description: z.string().trim().min(2).max(250) }).superRefine((value, context) => {
+  if (value.sourceDocumentId && value.customerId === "__new__") {
+    context.addIssue({ code: "custom", path: ["customerId"], message: "Linked receipts must use the source document customer" });
+  } else if (!value.sourceDocumentId && (value.customerId === "__new__" ? !value.newCustomerName : !value.customerId)) {
+    context.addIssue({ code: "custom", path: ["customerId"], message: "Choose or create a customer" });
+  }
+});
 const receiptEditSchema = z.object({ documentId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
 const documentLineSchema = z.object({ itemId: z.string().optional(), description: z.string().trim().min(2).max(250), quantity: z.coerce.number().positive().max(100000), unitPrice: z.coerce.number().nonnegative().max(100000000), discount: z.coerce.number().nonnegative().max(100000000), taxRate: z.coerce.number().nonnegative().max(100) });
 
@@ -98,6 +108,25 @@ const portfolioProjectMediaSchema = z.object({ id: z.string().min(1) });
 
 const maxPortfolioMediaFiles = 10;
 const maxPortfolioMediaBytes = 3 * 1024 * 1024;
+
+async function resolveCustomer(tx: Prisma.TransactionClient, selection: z.infer<typeof customerSelectionSchema>) {
+  if (selection.customerId === "__new__") {
+    if (!selection.newCustomerName) return null;
+    const customer = await tx.customer.create({
+      data: {
+        name: selection.newCustomerName,
+        company: selection.newCustomerCompany || null,
+        email: selection.newCustomerEmail || null,
+        phone: selection.newCustomerPhone || null,
+      },
+      select: { id: true, name: true },
+    });
+    return { customer, created: true };
+  }
+  if (!selection.customerId) return null;
+  const customer = await tx.customer.findUnique({ where: { id: selection.customerId }, select: { id: true, name: true } });
+  return customer ? { customer, created: false } : null;
+}
 
 async function preparePortfolioMedia(formData: FormData, uploadedById: string) {
   const values = formData.getAll("media");
@@ -152,9 +181,7 @@ export async function createQuotation(formData: FormData) {
   if (!owner || !company) redirect("/dashboard/quotations?error=setup");
 
   const result = await prisma.$transaction(async (tx) => {
-    const customer = parsed.data.customerId === "__new__"
-      ? await tx.customer.create({ data: { name: parsed.data.newCustomerName!, company: parsed.data.newCustomerCompany || null, email: parsed.data.newCustomerEmail || null, phone: parsed.data.newCustomerPhone || null }, select: { id: true, name: true } })
-      : await tx.customer.findUnique({ where: { id: parsed.data.customerId! }, select: { id: true, name: true } });
+    const customer = await resolveCustomer(tx, parsed.data);
     if (!customer) return null;
 
     const year = new Date().getFullYear();
@@ -176,16 +203,16 @@ export async function createQuotation(formData: FormData) {
     const document = await tx.document.create({
       data: {
         number, type: "QUOTATION", quotationStatus: "DRAFT", subtotal, tax, total,
-        customerId: customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue,
+        customerId: customer.customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue,
         items: { create: { description: parsed.data.description, quantity: parsed.data.quantity, unitPrice: parsed.data.unitPrice, taxRate, amount: subtotal, taxAmount: tax, total } },
       },
       select: { id: true, number: true },
     });
-    return { ...document, customer };
+    return { ...document, customer: customer.customer, customerCreated: customer.created };
   });
 
   if (!result) redirect("/dashboard/quotations?error=customer");
-  if (parsed.data.customerId === "__new__") {
+  if (result.customerCreated) {
     await prisma.auditLog.create({ data: { actorId: owner.id, action: "created", entityType: "Customer", entityId: result.customer.id, summary: `Created customer ${result.customer.name} from a quotation` } });
   }
   await prisma.auditLog.create({
@@ -323,8 +350,9 @@ export async function createReceipt(formData: FormData) {
     const amount = Math.round(parsed.data.amount * 100) / 100;
     const paid = source?.payments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
     if (source && amount > Math.round((source.total - paid) * 100) / 100 + 0.005) return { error: "balance" as const };
-    const customerId = source?.customerId ?? parsed.data.customerId;
-    if (!customerId || !(await tx.customer.findUnique({ where: { id: customerId }, select: { id: true } }))) return { error: "customer" as const };
+    const selectedCustomer = source ? null : await resolveCustomer(tx, parsed.data);
+    const customerId = source?.customerId ?? selectedCustomer?.customer.id;
+    if (!customerId) return { error: "customer" as const };
 
     const year = new Date().getFullYear();
     const number = await nextDocumentNumber(tx, "RECEIPT", year);
@@ -363,7 +391,7 @@ export async function createReceipt(formData: FormData) {
       const fullyPaid = paid + amount >= source.total - 0.005;
       await tx.document.update({ where: { id: source.id }, data: { invoiceStatus: fullyPaid ? "PAID" : "PARTIALLY_PAID" } });
     }
-    return { error: null as null, receipt, source };
+    return { error: null as null, receipt, source, createdCustomer: selectedCustomer?.created ? selectedCustomer.customer : null };
   });
 
   if (result.error === "source") redirect("/dashboard/receipts?error=source");
@@ -371,6 +399,7 @@ export async function createReceipt(formData: FormData) {
   if (result.error === "invoiced") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=quotation-invoiced`);
   if (result.error === "balance") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=balance`);
   if (result.error === "customer") redirect("/dashboard/receipts?error=customer");
+  if (result.createdCustomer) await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Customer", entityId: result.createdCustomer.id, summary: `Created customer ${result.createdCustomer.name} from a receipt` } });
   await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Receipt", entityId: result.receipt.id, summary: `Created receipt ${result.receipt.number}${result.source ? ` for ${result.source.type.toLowerCase()} ${result.source.number}` : " without a linked invoice or quotation"}` } });
   revalidatePath("/dashboard/receipts");
   revalidatePath("/dashboard/invoices");
@@ -459,7 +488,13 @@ export async function updateReceiptDetails(formData: FormData) {
 export async function updateQuotationOrInvoice(formData: FormData) {
   const session = await requirePrototypeSession();
   const documentId = String(formData.get("documentId") ?? "");
-  const customerId = String(formData.get("customerId") ?? "");
+  const customerSelection = customerSelectionSchema.safeParse({
+    customerId: String(formData.get("customerId") ?? ""),
+    newCustomerName: formData.get("newCustomerName") ?? undefined,
+    newCustomerCompany: formData.get("newCustomerCompany") ?? undefined,
+    newCustomerEmail: formData.get("newCustomerEmail") ?? undefined,
+    newCustomerPhone: formData.get("newCustomerPhone") ?? undefined,
+  });
   const terms = String(formData.get("terms") ?? "").trim();
   const itemIds = formData.getAll("itemId").map(String);
   const descriptions = formData.getAll("description");
@@ -469,7 +504,7 @@ export async function updateQuotationOrInvoice(formData: FormData) {
   const taxRates = formData.getAll("taxRate");
   const path = `/dashboard/documents/${encodeURIComponent(documentId)}`;
   const fields = [itemIds, descriptions, quantities, unitPrices, discounts, taxRates];
-  if (!documentId || !customerId || terms.length > 8000 || !itemIds.length || itemIds.length > 100 || fields.some((values) => values.length !== itemIds.length)) redirect(`${path}?edit=invalid`);
+  if (!documentId || !customerSelection.success || !customerSelection.data.customerId || terms.length > 8000 || !itemIds.length || itemIds.length > 100 || fields.some((values) => values.length !== itemIds.length)) redirect(`${path}?edit=invalid`);
 
   const rows = itemIds.map((itemId, index) => {
     const description = String(descriptions[index] ?? "").trim();
@@ -488,19 +523,21 @@ export async function updateQuotationOrInvoice(formData: FormData) {
 
   const result = await prisma.$transaction(async (tx) => {
     const document = await tx.document.findUnique({ where: { id: documentId }, include: { items: { orderBy: { sortOrder: "asc" } }, payments: { select: { id: true } }, derivedDocuments: { select: { id: true }, where: { type: "INVOICE" } } } });
-    if (!document || !["QUOTATION", "INVOICE"].includes(document.type)) return "invalid" as const;
-    if (document.type === "QUOTATION" && document.derivedDocuments.length) return "locked" as const;
-    if (document.type === "INVOICE" && (document.payments.length || document.invoiceStatus === "VOID")) return "locked" as const;
-    if (!(await tx.customer.findUnique({ where: { id: customerId }, select: { id: true } }))) return "invalid" as const;
+    if (!document || !["QUOTATION", "INVOICE"].includes(document.type)) return { status: "invalid" as const };
+    if (document.type === "QUOTATION" && document.derivedDocuments.length) return { status: "locked" as const };
+    if (document.type === "INVOICE" && (document.payments.length || document.invoiceStatus === "VOID")) return { status: "locked" as const };
 
     const existingDocumentItemIds = new Set(document.items.map((item) => item.id));
     for (const row of rows) {
-      if (row.data.itemId && !existingDocumentItemIds.has(row.data.itemId)) return "invalid" as const;
+      if (row.data.itemId && !existingDocumentItemIds.has(row.data.itemId)) return { status: "invalid" as const };
     }
     if (document.items.some((item) => !rows.some((row) => row.data.itemId === item.id)) && rows.some((row) => row.data.itemId)) {
       const missingItem = document.items.find((item) => !rows.some((row) => row.data.itemId === item.id));
-      if (missingItem) return "invalid" as const;
+      if (missingItem) return { status: "invalid" as const };
     }
+
+    const selectedCustomer = await resolveCustomer(tx, customerSelection.data);
+    if (!selectedCustomer) return { status: "invalid" as const };
 
     let subtotal = 0;
     let tax = 0;
@@ -537,15 +574,16 @@ export async function updateQuotationOrInvoice(formData: FormData) {
       await Promise.all(staleItems.map((item) => tx.documentItem.delete({ where: { id: item.id } })));
     }
 
-    await tx.document.update({ where: { id: document.id }, data: { customerId, terms, subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 } });
-    return "updated" as const;
+    await tx.document.update({ where: { id: document.id }, data: { customerId: selectedCustomer.customer.id, terms, subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 } });
+    return { status: "updated" as const, createdCustomer: selectedCustomer.created ? selectedCustomer.customer : null };
   });
-  if (result === "invalid") redirect(`${path}?edit=invalid`);
-  if (result === "locked") redirect(`${path}?edit=locked`);
+  if (result.status === "invalid") redirect(`${path}?edit=invalid`);
+  if (result.status === "locked") redirect(`${path}?edit=locked`);
   revalidatePath(path);
   revalidatePath("/dashboard/quotations");
   revalidatePath("/dashboard/invoices");
   const updatedDocument = await prisma.document.findUnique({ where: { id: documentId }, select: { number: true, type: true } });
+  if (result.createdCustomer) await prisma.auditLog.create({ data: { actorId: session.userId, action: "created", entityType: "Customer", entityId: result.createdCustomer.id, summary: `Created customer ${result.createdCustomer.name} from a document edit` } });
   await prisma.auditLog.create({ data: { actorId: session.userId, action: "updated", entityType: "Document", entityId: documentId, summary: `Updated ${updatedDocument?.type.toLowerCase() ?? "document"} ${updatedDocument?.number ?? documentId}` } });
   redirect(`${path}?edit=updated`);
 }
