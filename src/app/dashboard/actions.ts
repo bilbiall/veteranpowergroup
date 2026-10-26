@@ -57,8 +57,8 @@ const schoolPlanSchema = z.object({
 });
 const documentIdSchema = z.object({ documentId: z.string().min(1) });
 const paymentSchema = z.object({ invoiceId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
-const receiptEditSchema = z.object({ documentId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional(), description: z.string().trim().min(2).max(250) });
-const documentLineSchema = z.object({ itemId: z.string().min(1), description: z.string().trim().min(2).max(250), quantity: z.coerce.number().positive().max(100000), unitPrice: z.coerce.number().nonnegative().max(100000000), discount: z.coerce.number().nonnegative().max(100000000), taxRate: z.coerce.number().nonnegative().max(100) });
+const receiptEditSchema = z.object({ documentId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
+const documentLineSchema = z.object({ itemId: z.string().optional(), description: z.string().trim().min(2).max(250), quantity: z.coerce.number().positive().max(100000), unitPrice: z.coerce.number().nonnegative().max(100000000), discount: z.coerce.number().nonnegative().max(100000000), taxRate: z.coerce.number().nonnegative().max(100) });
 
 async function nextDocumentNumber(tx: Prisma.TransactionClient, type: "QUOTATION" | "INVOICE" | "RECEIPT", year: number) {
   const settings = await tx.documentSettings.findUnique({ where: { companyId: 1 }, select: { quotePrefix: true, invoicePrefix: true, receiptPrefix: true } });
@@ -293,13 +293,50 @@ export async function updateReceiptDetails(formData: FormData) {
   const parsed = receiptEditSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/dashboard/documents/${String(formData.get("documentId") ?? "")}?receipt=invalid`);
 
-  const amount = Math.round(parsed.data.amount * 100) / 100;
+  const receiptItemIds = formData.getAll("receiptItemId").map(String);
+  const descriptions = formData.getAll("receiptDescription");
+  const quantities = formData.getAll("receiptQuantity");
+  const unitPrices = formData.getAll("receiptUnitPrice");
+  const discounts = formData.getAll("receiptDiscount");
+  const taxRates = formData.getAll("receiptTaxRate");
+  const receiptFields = [receiptItemIds, descriptions, quantities, unitPrices, discounts, taxRates];
+  if (!receiptItemIds.length || receiptItemIds.length > 100 || receiptFields.some((values) => values.length !== receiptItemIds.length)) {
+    redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
+  }
+  const rows = receiptItemIds.map((itemId, index) => documentLineSchema.safeParse({
+    itemId: itemId || undefined,
+    description: String(descriptions[index] ?? "").trim(),
+    quantity: quantities[index],
+    unitPrice: unitPrices[index],
+    discount: discounts[index],
+    taxRate: taxRates[index],
+  }));
+  if (rows.some((row) => !row.success) || rows.some((row) => row.success && row.data.discount > row.data.quantity * row.data.unitPrice)) {
+    redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
+  }
+  const validRows = rows.filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => row.success);
+  let subtotal = 0;
+  let tax = 0;
+  const calculatedRows = validRows.map((row, index) => {
+    const amount = Math.round((row.data.quantity * row.data.unitPrice - row.data.discount) * 100) / 100;
+    const taxAmount = Math.round(amount * row.data.taxRate) / 100;
+    subtotal = Math.round((subtotal + amount) * 100) / 100;
+    tax = Math.round((tax + taxAmount) * 100) / 100;
+    return { ...row.data, amount, taxAmount, total: Math.round((amount + taxAmount) * 100) / 100, sortOrder: index };
+  });
+  const amount = Math.round((subtotal + tax) * 100) / 100;
+  if (amount <= 0 || amount !== Math.round(parsed.data.amount * 100) / 100) redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
+
   const result = await prisma.$transaction(async (tx) => {
     const receipt = await tx.document.findUnique({
       where: { id: parsed.data.documentId },
       include: { payment: true, items: { orderBy: { sortOrder: "asc" } }, sourceDocument: { include: { payments: { select: { id: true, amount: true } } } } },
     });
-    if (!receipt || receipt.type !== "RECEIPT" || receipt.receiptStatus !== "ISSUED" || !receipt.payment || receipt.sourceDocument?.type !== "INVOICE" || receipt.items.length !== 1) return { error: "link" as const };
+    if (!receipt || receipt.type !== "RECEIPT" || receipt.receiptStatus !== "ISSUED" || !receipt.payment || receipt.sourceDocument?.type !== "INVOICE") return { error: "link" as const };
+
+    const existingItemIds = new Set(receipt.items.map((item) => item.id));
+    const submittedItemIds = calculatedRows.filter((row) => row.itemId).map((row) => row.itemId as string);
+    if (new Set(submittedItemIds).size !== submittedItemIds.length || submittedItemIds.some((itemId) => !existingItemIds.has(itemId)) || receipt.items.some((item) => !submittedItemIds.includes(item.id))) return { error: "link" as const };
 
     const paidByOtherReceipts = receipt.sourceDocument.payments
       .filter((payment) => payment.id !== receipt.payment!.id)
@@ -308,8 +345,14 @@ export async function updateReceiptDetails(formData: FormData) {
     if (revisedPaidTotal > Math.round(receipt.sourceDocument.total * 100) / 100 + 0.005) return { error: "balance" as const };
 
     await tx.payment.update({ where: { id: receipt.payment.id }, data: { amount, method: parsed.data.method, reference: parsed.data.reference || null } });
-    await tx.documentItem.update({ where: { id: receipt.items[0].id }, data: { description: parsed.data.description, quantity: 1, unitPrice: amount, discount: 0, taxRate: 0, amount, taxAmount: 0, total: amount } });
-    await tx.document.update({ where: { id: receipt.id }, data: { subtotal: amount, tax: 0, total: amount } });
+    for (const row of calculatedRows) {
+      if (row.itemId) {
+        await tx.documentItem.update({ where: { id: row.itemId }, data: { description: row.description, quantity: row.quantity, unitPrice: row.unitPrice, discount: row.discount, taxRate: row.taxRate, amount: row.amount, taxAmount: row.taxAmount, total: row.total, sortOrder: row.sortOrder } });
+      } else {
+        await tx.documentItem.create({ data: { documentId: receipt.id, description: row.description, quantity: row.quantity, unitPrice: row.unitPrice, discount: row.discount, taxRate: row.taxRate, amount: row.amount, taxAmount: row.taxAmount, total: row.total, sortOrder: row.sortOrder } });
+      }
+    }
+    await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount } });
     const invoiceStatus = revisedPaidTotal >= receipt.sourceDocument.total - 0.005 ? "PAID" : revisedPaidTotal > 0 ? "PARTIALLY_PAID" : "ISSUED";
     await tx.document.update({ where: { id: receipt.sourceDocument.id }, data: { invoiceStatus } });
     return { error: null as null, receiptNumber: receipt.number, invoiceNumber: receipt.sourceDocument.number };
@@ -334,30 +377,74 @@ export async function updateQuotationOrInvoice(formData: FormData) {
   const taxRates = formData.getAll("taxRate");
   const path = `/dashboard/documents/${encodeURIComponent(documentId)}`;
   const fields = [itemIds, descriptions, quantities, unitPrices, discounts, taxRates];
-  if (!documentId || !customerId || terms.length > 8000 || !itemIds.length || itemIds.length > 100 || new Set(itemIds).size !== itemIds.length || fields.some((values) => values.length !== itemIds.length)) redirect(`${path}?edit=invalid`);
-  const items = itemIds.map((itemId, index) => documentLineSchema.safeParse({ itemId, description: descriptions[index], quantity: quantities[index], unitPrice: unitPrices[index], discount: discounts[index], taxRate: taxRates[index] }));
-  if (items.some((item) => !item.success)) redirect(`${path}?edit=invalid`);
-  const parsedItems = items.map((item) => (item as { success: true; data: z.infer<typeof documentLineSchema> }).data);
-  if (parsedItems.some((item) => item.discount > item.quantity * item.unitPrice)) redirect(`${path}?edit=invalid`);
+  if (!documentId || !customerId || terms.length > 8000 || !itemIds.length || itemIds.length > 100 || fields.some((values) => values.length !== itemIds.length)) redirect(`${path}?edit=invalid`);
+
+  const rows = itemIds.map((itemId, index) => {
+    const description = String(descriptions[index] ?? "").trim();
+    const quantity = String(quantities[index] ?? "").trim();
+    const unitPrice = String(unitPrices[index] ?? "").trim();
+    const discount = String(discounts[index] ?? "").trim();
+    const taxRate = String(taxRates[index] ?? "").trim();
+    const hasValue = description || quantity || unitPrice || discount || taxRate;
+    if (!hasValue) return null;
+    return documentLineSchema.safeParse({ itemId: itemId || undefined, description, quantity, unitPrice, discount, taxRate });
+  }).filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => Boolean(row) && row.success);
+
+  if (rows.length === 0 || rows.some((row) => row.data.discount > row.data.quantity * row.data.unitPrice)) redirect(`${path}?edit=invalid`);
+  const existingItemIds = rows.filter((row) => row.data.itemId).map((row) => row.data.itemId as string);
+  if (new Set(existingItemIds).size !== existingItemIds.length) redirect(`${path}?edit=invalid`);
 
   const result = await prisma.$transaction(async (tx) => {
     const document = await tx.document.findUnique({ where: { id: documentId }, include: { items: { orderBy: { sortOrder: "asc" } }, payments: { select: { id: true } }, derivedDocuments: { select: { id: true }, where: { type: "INVOICE" } } } });
     if (!document || !["QUOTATION", "INVOICE"].includes(document.type)) return "invalid" as const;
     if (document.type === "QUOTATION" && document.derivedDocuments.length) return "locked" as const;
     if (document.type === "INVOICE" && (document.payments.length || document.invoiceStatus === "VOID")) return "locked" as const;
-    if (document.items.length !== parsedItems.length || document.items.some((item) => !parsedItems.some((line) => line.itemId === item.id))) return "invalid" as const;
     if (!(await tx.customer.findUnique({ where: { id: customerId }, select: { id: true } }))) return "invalid" as const;
+
+    const existingDocumentItemIds = new Set(document.items.map((item) => item.id));
+    for (const row of rows) {
+      if (row.data.itemId && !existingDocumentItemIds.has(row.data.itemId)) return "invalid" as const;
+    }
+    if (document.items.some((item) => !rows.some((row) => row.data.itemId === item.id)) && rows.some((row) => row.data.itemId)) {
+      const missingItem = document.items.find((item) => !rows.some((row) => row.data.itemId === item.id));
+      if (missingItem) return "invalid" as const;
+    }
 
     let subtotal = 0;
     let tax = 0;
-    for (const [index, line] of parsedItems.entries()) {
-      const amount = Math.round((line.quantity * line.unitPrice - line.discount) * 100) / 100;
-      const taxAmount = Math.round(amount * line.taxRate) / 100;
+    for (const [index, row] of rows.entries()) {
+      const amount = Math.round((row.data.quantity * row.data.unitPrice - row.data.discount) * 100) / 100;
+      const taxAmount = Math.round(amount * row.data.taxRate) / 100;
       const total = Math.round((amount + taxAmount) * 100) / 100;
       subtotal = Math.round((subtotal + amount) * 100) / 100;
       tax = Math.round((tax + taxAmount) * 100) / 100;
-      await tx.documentItem.update({ where: { id: line.itemId }, data: { description: line.description, quantity: line.quantity, unitPrice: line.unitPrice, discount: line.discount, taxRate: line.taxRate, amount, taxAmount, total, sortOrder: index } });
+      if (row.data.itemId) {
+        await tx.documentItem.update({ where: { id: row.data.itemId }, data: { description: row.data.description, quantity: row.data.quantity, unitPrice: row.data.unitPrice, discount: row.data.discount, taxRate: row.data.taxRate, amount, taxAmount, total, sortOrder: index } });
+      } else {
+        await tx.documentItem.create({
+          data: {
+            documentId: document.id,
+            description: row.data.description,
+            quantity: row.data.quantity,
+            unitPrice: row.data.unitPrice,
+            discount: row.data.discount,
+            taxRate: row.data.taxRate,
+            amount,
+            taxAmount,
+            total,
+            sortOrder: index,
+          },
+        });
+      }
     }
+
+    const remainingItems = await tx.documentItem.findMany({ where: { documentId: document.id }, select: { id: true } });
+    const incomingIds = new Set(rows.filter((row) => row.data.itemId).map((row) => row.data.itemId as string));
+    const staleItems = remainingItems.filter((item) => !incomingIds.has(item.id));
+    if (staleItems.length > 0) {
+      await Promise.all(staleItems.map((item) => tx.documentItem.delete({ where: { id: item.id } })));
+    }
+
     await tx.document.update({ where: { id: document.id }, data: { customerId, terms, subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 } });
     return "updated" as const;
   });
