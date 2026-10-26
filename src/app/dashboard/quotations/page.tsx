@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { createQuotation } from "@/app/dashboard/actions";
 import { requirePrototypeSession } from "@/lib/prototype-auth";
 import { formatDocumentCurrency } from "@/lib/document-export-data";
+import QuotationForm from "./quotation-form";
 import Link from "next/link";
 
 export default async function QuotationsPage({ searchParams }: PageProps<"/dashboard/quotations">) {
@@ -22,7 +22,7 @@ export default async function QuotationsPage({ searchParams }: PageProps<"/dashb
       {quotations.length === 0 ? <p className="empty-state">No quotations yet. Create a draft below.</p> : <div className="table-scroll"><table><thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Items</th><th>Linked invoices</th><th>Total</th><th>Created</th><th /></tr></thead><tbody>{quotations.map((quote) => { const received = quote.payments.reduce((sum, payment) => sum + payment.amount, 0); const canCreateReceipt = quote.derivedDocuments.length === 0 && quote.total - received > 0.005; return <tr key={quote.id}><td>{quote.number}</td><td>{quote.customer.company || quote.customer.name}</td><td>{quote.quotationStatus ?? "Draft"}</td><td>{quote._count.items}</td><td>{quote.derivedDocuments.length}</td><td>{formatDocumentCurrency(quote.total, quote.currency)}</td><td>{quote.createdAt.toLocaleDateString("en")}</td><td><Link className="table-action" href={`/dashboard/documents/${quote.id}`}>View, edit &amp; download</Link>{canCreateReceipt && <> · <Link className="table-action" href={`/dashboard/receipts?sourceDocumentId=${quote.id}`}>Create receipt</Link></>}</td></tr>; })}</tbody></table></div>}
     </section>
     <section className="panel form-panel"><div className="panel-heading"><div><p className="eyebrow">Prototype workflow</p><h3>New draft quotation</h3></div></div>
-      {customers.length === 0 ? <p className="empty-state">Add a customer first in the <a className="inline-link" href="/dashboard/customers">customer directory</a>.</p> : <form action={createQuotation} className="prototype-form"><label>Customer<select name="customerId" required defaultValue=""><option value="" disabled>Select a sample customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.company ? `${customer.company} · ${customer.name}` : customer.name}</option>)}</select></label><label>Description<input name="description" required minLength={2} maxLength={250} /></label><label>Quantity<input name="quantity" type="number" min="0.01" step="0.01" defaultValue="1" required /></label><label>Unit price<input name="unitPrice" type="number" min="0" step="0.01" defaultValue="0" required /></label><button className="dashboard-button" type="submit">Create draft</button></form>}
+      <QuotationForm customers={customers} />
     </section>
   </main>;
 }

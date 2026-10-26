@@ -38,11 +38,15 @@ const customerSchema = z.object({
 });
 
 const quotationSchema = z.object({
-  customerId: z.string().min(1),
+  customerId: z.string().optional(),
+  newCustomerName: z.string().trim().max(120).optional(),
+  newCustomerCompany: z.string().trim().max(120).optional(),
+  newCustomerEmail: z.union([z.literal(""), z.email()]).optional(),
+  newCustomerPhone: z.string().trim().max(40).optional(),
   description: z.string().trim().min(2).max(250),
   quantity: z.coerce.number().positive().max(100000),
   unitPrice: z.coerce.number().nonnegative().max(100000000),
-});
+}).refine((value) => value.customerId === "__new__" ? Boolean(value.newCustomerName && value.newCustomerName.length >= 2) : Boolean(value.customerId));
 const schoolPlanSchema = z.object({
   planId: z.string().min(1),
   customerName: z.string().trim().min(2).max(160),
@@ -148,7 +152,9 @@ export async function createQuotation(formData: FormData) {
   if (!owner || !company) redirect("/dashboard/quotations?error=setup");
 
   const result = await prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.findUnique({ where: { id: parsed.data.customerId }, select: { id: true } });
+    const customer = parsed.data.customerId === "__new__"
+      ? await tx.customer.create({ data: { name: parsed.data.newCustomerName!, company: parsed.data.newCustomerCompany || null, email: parsed.data.newCustomerEmail || null, phone: parsed.data.newCustomerPhone || null }, select: { id: true, name: true } })
+      : await tx.customer.findUnique({ where: { id: parsed.data.customerId! }, select: { id: true, name: true } });
     if (!customer) return null;
 
     const year = new Date().getFullYear();
@@ -167,7 +173,7 @@ export async function createQuotation(formData: FormData) {
     const total = Math.round((subtotal + tax) * 100) / 100;
     const number = `${prefix}-${year}-${String(sequenceValue).padStart(4, "0")}`;
 
-    return tx.document.create({
+    const document = await tx.document.create({
       data: {
         number, type: "QUOTATION", quotationStatus: "DRAFT", subtotal, tax, total,
         customerId: customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue,
@@ -175,9 +181,13 @@ export async function createQuotation(formData: FormData) {
       },
       select: { id: true, number: true },
     });
+    return { ...document, customer };
   });
 
   if (!result) redirect("/dashboard/quotations?error=customer");
+  if (parsed.data.customerId === "__new__") {
+    await prisma.auditLog.create({ data: { actorId: owner.id, action: "created", entityType: "Customer", entityId: result.customer.id, summary: `Created customer ${result.customer.name} from a quotation` } });
+  }
   await prisma.auditLog.create({
     data: { actorId: owner.id, action: "created", entityType: "Quotation", entityId: result.id, summary: `Created draft quotation ${result.number}` },
   });
