@@ -74,7 +74,9 @@ export default function DocumentLineItemEnhancer({ documentId, documentType, ite
   useEffect(() => {
     if (documentType === "QUOTATION" || documentType === "INVOICE") {
       const form = window.document.querySelector<HTMLFormElement>(".document-edit-form");
-      const tbody = window.document.getElementById(`document-items-${documentId}`);
+      const tbodyElement = window.document.getElementById(`document-items-${documentId}`);
+      if (!(tbodyElement instanceof HTMLTableSectionElement)) return;
+      const tbody = tbodyElement;
       const tableScroll = tbody?.closest(".table-scroll");
       if (!form || !tbody || !tableScroll || form.dataset.rowsEnhanced === "true") return;
 

@@ -258,12 +258,12 @@ model Payment {
   paidAt    DateTime      @default(now())
 
   customerId String
-  documentId String
+  documentId String?
   receiptId  String @unique
 
   customer Customer @relation(fields: [customerId], references: [id])
 
-  document Document @relation(fields: [documentId], references: [id])
+  document Document? @relation(fields: [documentId], references: [id])
 
   receipt Document @relation("PaymentReceipt", fields: [receiptId], references: [id])
 

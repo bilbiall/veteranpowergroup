@@ -57,6 +57,7 @@ const schoolPlanSchema = z.object({
 });
 const documentIdSchema = z.object({ documentId: z.string().min(1) });
 const paymentSchema = z.object({ invoiceId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
+const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), customerId: z.string().optional(), amount: z.coerce.number().positive().max(100000000), currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional(), description: z.string().trim().min(2).max(250) });
 const receiptEditSchema = z.object({ documentId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
 const documentLineSchema = z.object({ itemId: z.string().optional(), description: z.string().trim().min(2).max(250), quantity: z.coerce.number().positive().max(100000), unitPrice: z.coerce.number().nonnegative().max(100000000), discount: z.coerce.number().nonnegative().max(100000000), taxRate: z.coerce.number().nonnegative().max(100) });
 
@@ -232,8 +233,9 @@ export async function createInstallmentInvoices(formData: FormData) {
   if (!parsed.success) redirect("/dashboard/quotations?error=invalid");
   const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
   const result = await prisma.$transaction(async (tx) => {
-    const quote = await tx.document.findUnique({ where: { id: parsed.data.documentId }, include: { items: { orderBy: { sortOrder: "asc" } }, media: true } });
+    const quote = await tx.document.findUnique({ where: { id: parsed.data.documentId }, include: { items: { orderBy: { sortOrder: "asc" } }, media: true, payments: { select: { id: true } } } });
     if (!quote || quote.type !== "QUOTATION" || !quote.items.length) return { error: "invalid" as const };
+    if (quote.payments.length) return { error: "payments" as const };
     const existing = await tx.document.count({ where: { sourceDocumentId: quote.id, type: "INVOICE" } });
     if (existing) return { error: "exists" as const };
     const invoices = [];
@@ -247,6 +249,7 @@ export async function createInstallmentInvoices(formData: FormData) {
   });
   if (result.error === "invalid") redirect("/dashboard/quotations?error=invalid");
   if (result.error === "exists") redirect(`/dashboard/documents/${parsed.data.documentId}?invoices=exists`);
+  if (result.error === "payments") redirect(`/dashboard/documents/${parsed.data.documentId}?invoices=payments`);
   if (actor && result.error === null) await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Invoice", entityId: parsed.data.documentId, summary: `Created ${result.invoices.length} installment invoices linked to quotation ${result.quoteNumber}` } });
   redirect(`/dashboard/documents/${parsed.data.documentId}?invoices=created`);
 }
@@ -286,6 +289,83 @@ export async function recordInvoicePayment(formData: FormData) {
   if (result.error === "excess") redirect(`/dashboard/documents/${parsed.data.invoiceId}?error=payment-excess`);
   await prisma.auditLog.create({ data: { actorId: actor.id, action: "recorded", entityType: "Payment", entityId: result.receipt.id, summary: `Recorded payment for invoice ${result.invoiceNumber}; receipt ${result.receipt.number}` } });
   redirect(`/dashboard/documents/${result.receipt.id}`);
+}
+
+export async function createReceipt(formData: FormData) {
+  const session = await requirePrototypeSession();
+  const parsed = receiptCreateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/dashboard/receipts?error=invalid");
+  const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
+  if (!actor) redirect("/dashboard/receipts?error=setup");
+
+  const result = await prisma.$transaction(async (tx) => {
+    const source = parsed.data.sourceDocumentId
+      ? await tx.document.findUnique({
+        where: { id: parsed.data.sourceDocumentId },
+        include: { payments: { select: { amount: true } }, derivedDocuments: { where: { type: "INVOICE" }, select: { id: true } }, media: true },
+      })
+      : null;
+    if (parsed.data.sourceDocumentId && !source) return { error: "source" as const };
+    if (source && source.type !== "INVOICE" && source.type !== "QUOTATION") return { error: "source" as const };
+    if (source?.type === "INVOICE" && !["ISSUED", "PARTIALLY_PAID"].includes(source.invoiceStatus ?? "")) return { error: "state" as const };
+    if (source?.type === "QUOTATION" && source.derivedDocuments.length > 0) return { error: "invoiced" as const };
+
+    const amount = Math.round(parsed.data.amount * 100) / 100;
+    const paid = source?.payments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
+    if (source && amount > Math.round((source.total - paid) * 100) / 100 + 0.005) return { error: "balance" as const };
+    const customerId = source?.customerId ?? parsed.data.customerId;
+    if (!customerId || !(await tx.customer.findUnique({ where: { id: customerId }, select: { id: true } }))) return { error: "customer" as const };
+
+    const year = new Date().getFullYear();
+    const number = await nextDocumentNumber(tx, "RECEIPT", year);
+    const currency = source?.currency ?? parsed.data.currency ?? "KES";
+    const receipt = await tx.document.create({
+      data: {
+        number: number.number,
+        type: "RECEIPT",
+        receiptStatus: "ISSUED",
+        subtotal: amount,
+        tax: 0,
+        total: amount,
+        currency,
+        customerId,
+        ownerId: actor.id,
+        companyId: source?.companyId ?? 1,
+        sourceDocumentId: source?.id ?? null,
+        sequenceYear: year,
+        sequenceValue: number.sequenceValue,
+        items: { create: { description: parsed.data.description, quantity: 1, unitPrice: amount, amount, taxRate: 0, taxAmount: 0, total: amount } },
+        ...(source?.media.length ? { media: { create: source.media.map(({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder }) => ({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder })) } } : {}),
+      },
+      select: { id: true, number: true },
+    });
+    await tx.payment.create({
+      data: {
+        amount,
+        method: parsed.data.method,
+        reference: parsed.data.reference || null,
+        customerId,
+        documentId: source?.id ?? null,
+        receiptId: receipt.id,
+      },
+    });
+    if (source?.type === "INVOICE") {
+      const fullyPaid = paid + amount >= source.total - 0.005;
+      await tx.document.update({ where: { id: source.id }, data: { invoiceStatus: fullyPaid ? "PAID" : "PARTIALLY_PAID" } });
+    }
+    return { error: null as null, receipt, source };
+  });
+
+  if (result.error === "source") redirect("/dashboard/receipts?error=source");
+  if (result.error === "state") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=invoice-state`);
+  if (result.error === "invoiced") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=quotation-invoiced`);
+  if (result.error === "balance") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=balance`);
+  if (result.error === "customer") redirect("/dashboard/receipts?error=customer");
+  await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Receipt", entityId: result.receipt.id, summary: `Created receipt ${result.receipt.number}${result.source ? ` for ${result.source.type.toLowerCase()} ${result.source.number}` : " without a linked invoice or quotation"}` } });
+  revalidatePath("/dashboard/receipts");
+  revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard/quotations");
+  redirect(`/dashboard/documents/${result.receipt.id}?receipt=created`);
 }
 
 export async function updateReceiptDetails(formData: FormData) {
@@ -332,17 +412,17 @@ export async function updateReceiptDetails(formData: FormData) {
       where: { id: parsed.data.documentId },
       include: { payment: true, items: { orderBy: { sortOrder: "asc" } }, sourceDocument: { include: { payments: { select: { id: true, amount: true } } } } },
     });
-    if (!receipt || receipt.type !== "RECEIPT" || receipt.receiptStatus !== "ISSUED" || !receipt.payment || receipt.sourceDocument?.type !== "INVOICE") return { error: "link" as const };
+    if (!receipt || receipt.type !== "RECEIPT" || receipt.receiptStatus !== "ISSUED" || !receipt.payment || (receipt.sourceDocument && !["INVOICE", "QUOTATION"].includes(receipt.sourceDocument.type))) return { error: "link" as const };
 
     const existingItemIds = new Set(receipt.items.map((item) => item.id));
     const submittedItemIds = calculatedRows.filter((row) => row.itemId).map((row) => row.itemId as string);
     if (new Set(submittedItemIds).size !== submittedItemIds.length || submittedItemIds.some((itemId) => !existingItemIds.has(itemId)) || receipt.items.some((item) => !submittedItemIds.includes(item.id))) return { error: "link" as const };
 
-    const paidByOtherReceipts = receipt.sourceDocument.payments
+    const paidByOtherReceipts = receipt.sourceDocument?.payments
       .filter((payment) => payment.id !== receipt.payment!.id)
-      .reduce((sum, payment) => sum + payment.amount, 0);
+      .reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
     const revisedPaidTotal = Math.round((paidByOtherReceipts + amount) * 100) / 100;
-    if (revisedPaidTotal > Math.round(receipt.sourceDocument.total * 100) / 100 + 0.005) return { error: "balance" as const };
+    if (receipt.sourceDocument && revisedPaidTotal > Math.round(receipt.sourceDocument.total * 100) / 100 + 0.005) return { error: "balance" as const };
 
     await tx.payment.update({ where: { id: receipt.payment.id }, data: { amount, method: parsed.data.method, reference: parsed.data.reference || null } });
     for (const row of calculatedRows) {
@@ -353,14 +433,16 @@ export async function updateReceiptDetails(formData: FormData) {
       }
     }
     await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount } });
-    const invoiceStatus = revisedPaidTotal >= receipt.sourceDocument.total - 0.005 ? "PAID" : revisedPaidTotal > 0 ? "PARTIALLY_PAID" : "ISSUED";
-    await tx.document.update({ where: { id: receipt.sourceDocument.id }, data: { invoiceStatus } });
-    return { error: null as null, receiptNumber: receipt.number, invoiceNumber: receipt.sourceDocument.number };
+    if (receipt.sourceDocument?.type === "INVOICE") {
+      const invoiceStatus = revisedPaidTotal >= receipt.sourceDocument.total - 0.005 ? "PAID" : revisedPaidTotal > 0 ? "PARTIALLY_PAID" : "ISSUED";
+      await tx.document.update({ where: { id: receipt.sourceDocument.id }, data: { invoiceStatus } });
+    }
+    return { error: null as null, receiptNumber: receipt.number, sourceNumber: receipt.sourceDocument?.number ?? null };
   });
 
   if (result.error === "link") redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=unavailable`);
   if (result.error === "balance") redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=balance`);
-  await prisma.auditLog.create({ data: { actorId: session.userId, action: "updated", entityType: "Receipt", entityId: parsed.data.documentId, summary: `Updated receipt ${result.receiptNumber} and reconciled invoice ${result.invoiceNumber}` } });
+  await prisma.auditLog.create({ data: { actorId: session.userId, action: "updated", entityType: "Receipt", entityId: parsed.data.documentId, summary: `Updated receipt ${result.receiptNumber}${result.sourceNumber ? ` linked to ${result.sourceNumber}` : ""}` } });
   redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=updated`);
 }
 
@@ -388,7 +470,7 @@ export async function updateQuotationOrInvoice(formData: FormData) {
     const hasValue = description || quantity || unitPrice || discount || taxRate;
     if (!hasValue) return null;
     return documentLineSchema.safeParse({ itemId: itemId || undefined, description, quantity, unitPrice, discount, taxRate });
-  }).filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => Boolean(row) && row.success);
+  }).filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => row !== null && row.success);
 
   if (rows.length === 0 || rows.some((row) => row.data.discount > row.data.quantity * row.data.unitPrice)) redirect(`${path}?edit=invalid`);
   const existingItemIds = rows.filter((row) => row.data.itemId).map((row) => row.data.itemId as string);
