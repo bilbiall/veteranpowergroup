@@ -438,6 +438,10 @@ td { color: var(--ink); }
 :root[data-theme="dark"] .why-section,
 :root[data-theme="dark"] .use-case-card,
 :root[data-theme="dark"] .report-sheet-grid article { background: #1d2621; }
+:root[data-theme="dark"] .portfolio-main > .portfolio-intro { color: #e0e8e2; }
+:root[data-theme="dark"] .live-project-card { background: #202823; color: var(--foreground); }
+:root[data-theme="dark"] .live-project-card p,
+:root[data-theme="dark"] .portfolio-project-media-item figcaption { color: #d0dbd3; }
 :root[data-theme="dark"] .solution-panel-accent,
 :root[data-theme="dark"] .portfolio-empty,
 :root[data-theme="dark"] .document-reference-numbers,
