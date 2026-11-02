@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 
 export default async function ReportsPage() {
-  await requirePrototypeSession();
+  await requireSectionAccess("reports");
   const [prospects, findings, visits, documents] = await Promise.all([
     prisma.prospect.count(),
     prisma.finding.count(),

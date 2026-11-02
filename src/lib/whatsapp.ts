@@ -1,4 +1,5 @@
 export const defaultWhatsappMessage = "Hello Veteran Power Solutions, I would like to enquire about your solutions.";
+export const defaultWhatsappNumber = "254707734670";
 
 // Accepts "0707 734 670", "+254 707 734 670" or "254707734670"; returns digits only in international format.
 export function normalizeWhatsappNumber(input: string) {

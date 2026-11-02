@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { buildDocumentExport, ExportFormat } from "@/lib/document-exports";
 import { findExportDocument } from "@/lib/document-export-data";
-import { getPrototypeSession } from "@/lib/prototype-auth";
+import { getPrototypeSession, getStaffAccess } from "@/lib/prototype-auth";
+import { documentSection } from "@/lib/staff-sections";
 import { withApiErrorHandling } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -24,6 +25,9 @@ export const GET = withApiErrorHandling(async (request: NextRequest, context: { 
   const { id } = await context.params;
   const document = await findExportDocument(id);
   if (!document) return Response.json({ error: "Document not found" }, { status: 404 });
+  const access = await getStaffAccess(session.userId);
+  const section = documentSection(document.type);
+  if (!section || !access.sections.includes(section)) return Response.json({ error: "Access denied" }, { status: 403 });
 
   const content = await buildDocumentExport(document, format);
   const safeNumber = document.number.replace(/[^a-zA-Z0-9_-]/g, "_");

@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 import { formatDocumentCurrency } from "@/lib/document-export-data";
 import QuotationForm from "./quotation-form";
 import Link from "next/link";
 
 export default async function QuotationsPage({ searchParams }: PageProps<"/dashboard/quotations">) {
   const params = await searchParams;
-  await requirePrototypeSession();
+  await requireSectionAccess("quotations");
   const [customers, quotations] = await Promise.all([
     prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, company: true } }),
     prisma.document.findMany({ where: { type: "QUOTATION" }, orderBy: { createdAt: "desc" }, include: { customer: { select: { name: true, company: true } }, _count: { select: { items: true } }, payments: { select: { amount: true } }, derivedDocuments: { where: { type: "INVOICE" }, select: { id: true } } } }),

@@ -6,10 +6,11 @@ import sharp from "sharp";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSession } from "@/lib/prototype-auth";
+import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSession, requireSectionAccess } from "@/lib/prototype-auth";
 import { getSchoolPaymentPlan } from "@/lib/school-payment-plans";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 import { isPortfolioMediaType } from "@/lib/portfolio-media";
+import { documentSection, isStaffAccessKey, isStaffSectionKey } from "@/lib/staff-sections";
 
 const staffAccountSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -29,6 +30,13 @@ const staffPasswordSchema = z.object({
 
 const staffRoleName = "Prototype staff";
 const adminRoleName = "Prototype administrator";
+
+function parseStaffSections(formData: FormData) {
+  const sections = [...new Set(formData.getAll("sections"))];
+  if (!sections.every(isStaffAccessKey)) return null;
+  if (sections.includes("company-profile") && !sections.includes("settings")) sections.push("settings");
+  return sections.some(isStaffSectionKey) ? sections : null;
+}
 
 const customerSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -97,7 +105,7 @@ const findingSchema = z.object({
 const findingStatusSchema = z.object({ id: z.string().min(1), status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]) });
 const portfolioProjectSchema = z.object({
   title: z.string().trim().min(3).max(160),
-  category: z.enum(["Power Solutions", "Solar Solutions", "Borehole Solutions"]),
+  category: z.array(z.enum(["Power Solutions", "Solar Solutions", "Borehole Solutions"])).min(1).max(3),
   location: z.string().trim().max(160).optional(),
   summary: z.string().trim().min(10).max(2000),
   completionYear: z.union([z.literal(""), z.coerce.number().int().min(1980).max(2100)]).optional(),
@@ -108,7 +116,6 @@ const portfolioProjectDeleteSchema = z.object({ id: z.string().min(1) });
 const portfolioProjectMediaSchema = z.object({ id: z.string().min(1) });
 
 const maxPortfolioMediaFiles = 10;
-const maxPortfolioMediaBytes = 3 * 1024 * 1024;
 
 async function resolveCustomer(tx: Prisma.TransactionClient, selection: z.infer<typeof customerSelectionSchema>) {
   if (selection.customerId === "__new__") {
@@ -133,7 +140,7 @@ async function preparePortfolioMedia(formData: FormData, uploadedById: string) {
   const values = formData.getAll("media");
   if (values.some((value) => typeof value !== "string" && !(value instanceof File))) return null;
   const files = values.filter((value): value is File => value instanceof File && value.size > 0);
-  if (files.length > maxPortfolioMediaFiles || files.reduce((total, file) => total + file.size, 0) > maxPortfolioMediaBytes) return null;
+  if (files.length > maxPortfolioMediaFiles) return null;
   if (files.some((file) => !isPortfolioMediaType(file.type.toLowerCase()))) return null;
 
   return Promise.all(files.map(async (file) => {
@@ -153,7 +160,7 @@ async function preparePortfolioMedia(formData: FormData, uploadedById: string) {
 }
 
 export async function createCustomer(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("customers");
   const parsed = customerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/customers?error=invalid");
   const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
@@ -174,7 +181,7 @@ export async function createCustomer(formData: FormData) {
 }
 
 export async function createQuotation(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("quotations");
   const parsed = quotationSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/quotations?error=invalid");
   const owner = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
@@ -223,7 +230,7 @@ export async function createQuotation(formData: FormData) {
 }
 
 export async function createSchoolPlanQuotation(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("payment-plans");
   const parsed = schoolPlanSchema.safeParse(Object.fromEntries(formData));
   const plan = parsed.success ? getSchoolPaymentPlan(parsed.data.planId) : undefined;
   if (!parsed.success || !plan) redirect("/dashboard/payment-plans?error=invalid");
@@ -266,7 +273,7 @@ export async function createSchoolPlanQuotation(formData: FormData) {
 }
 
 export async function createInstallmentInvoices(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("invoices");
   const parsed = documentIdSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/quotations?error=invalid");
   const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
@@ -293,7 +300,7 @@ export async function createInstallmentInvoices(formData: FormData) {
 }
 
 export async function issueInvoice(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("invoices");
   const parsed = documentIdSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/invoices?error=invalid");
   const invoice = await prisma.document.findUnique({ where: { id: parsed.data.documentId }, select: { id: true, number: true, type: true, invoiceStatus: true } });
@@ -304,7 +311,7 @@ export async function issueInvoice(formData: FormData) {
 }
 
 export async function recordInvoicePayment(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("invoices");
   const parsed = paymentSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/invoices?error=invalid");
   const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
@@ -330,7 +337,7 @@ export async function recordInvoicePayment(formData: FormData) {
 }
 
 export async function createReceipt(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("receipts");
   const parsed = receiptCreateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/receipts?error=invalid");
   const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
@@ -409,7 +416,7 @@ export async function createReceipt(formData: FormData) {
 }
 
 export async function updateReceiptDetails(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("receipts");
   const parsed = receiptEditSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/dashboard/documents/${String(formData.get("documentId") ?? "")}?receipt=invalid`);
 
@@ -522,6 +529,10 @@ export async function updateQuotationOrInvoice(formData: FormData) {
   const existingItemIds = rows.filter((row) => row.data.itemId).map((row) => row.data.itemId as string);
   if (new Set(existingItemIds).size !== existingItemIds.length) redirect(`${path}?edit=invalid`);
 
+  const existingDocument = await prisma.document.findUnique({ where: { id: documentId }, select: { type: true } });
+  const requiredSection = existingDocument ? documentSection(existingDocument.type) : null;
+  if (!requiredSection) redirect(`${path}?edit=invalid`);
+  await requireSectionAccess(requiredSection);
   const result = await prisma.$transaction(async (tx) => {
     const document = await tx.document.findUnique({ where: { id: documentId }, include: { items: { orderBy: { sortOrder: "asc" } }, payments: { select: { id: true } }, derivedDocuments: { select: { id: true }, where: { type: "INVOICE" } } } });
     if (!document || !["QUOTATION", "INVOICE"].includes(document.type)) return { status: "invalid" as const };
@@ -592,7 +603,8 @@ export async function updateQuotationOrInvoice(formData: FormData) {
 export async function createStaffAccount(formData: FormData) {
   const actor = await requirePrototypeAdminSession();
   const parsed = staffAccountSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect("/dashboard/settings?staff=invalid");
+  const sections = parseStaffSections(formData);
+  if (!parsed.success || !sections) redirect("/dashboard/settings?staff=invalid");
 
   const existing = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
   if (existing) redirect("/dashboard/settings?staff=exists");
@@ -610,12 +622,13 @@ export async function createStaffAccount(formData: FormData) {
         name: parsed.data.name,
         email: parsed.data.email,
         passwordHash: hashStaffPassword(parsed.data.password),
+        sectionAccess: sections,
         roles: { create: { roleId: role.id } },
       },
       select: { id: true, name: true, email: true },
     });
     await prisma.auditLog.create({
-      data: { actorId: actor.userId, action: "created", entityType: "User", entityId: staff.id, summary: `Created staff account for ${staff.email}` },
+      data: { actorId: actor.userId, action: "created", entityType: "User", entityId: staff.id, summary: `Created staff account for ${staff.email}`, metadata: { sectionAccess: sections } },
     });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
@@ -645,6 +658,25 @@ export async function setStaffStatus(formData: FormData) {
   redirect("/dashboard/settings?staff=updated");
 }
 
+export async function updateStaffSections(formData: FormData) {
+  const actor = await requirePrototypeAdminSession();
+  const userId = String(formData.get("userId") ?? "");
+  const sections = parseStaffSections(formData);
+  if (!userId || !sections) redirect("/dashboard/settings?staff=invalid");
+
+  const staff = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, roles: { select: { role: { select: { name: true } } } } },
+  });
+  if (!staff || staff.roles.some(({ role }) => role.name === adminRoleName)) redirect("/dashboard/settings?staff=invalid");
+
+  await prisma.user.update({ where: { id: staff.id }, data: { sectionAccess: sections } });
+  await prisma.auditLog.create({
+    data: { actorId: actor.userId, action: "updated", entityType: "User", entityId: staff.id, summary: `Updated portal sections for ${staff.email}`, metadata: { sectionAccess: sections } },
+  });
+  redirect("/dashboard/settings?staff=sections");
+}
+
 export async function resetStaffPassword(formData: FormData) {
   const actor = await requirePrototypeAdminSession();
   const parsed = staffPasswordSchema.safeParse(Object.fromEntries(formData));
@@ -664,7 +696,7 @@ export async function resetStaffPassword(formData: FormData) {
 }
 
 export async function updateProspectStatus(formData: FormData) {
-  await requirePrototypeSession();
+  await requireSectionAccess("prospects");
   const parsed = prospectStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/prospects?error=invalid");
   await prisma.prospect.update({ where: { id: parsed.data.id }, data: { status: parsed.data.status } });
@@ -672,7 +704,7 @@ export async function updateProspectStatus(formData: FormData) {
 }
 
 export async function createFinding(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("findings");
   const parsed = findingSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/findings?error=invalid");
   const finding = await prisma.finding.create({ data: parsed.data });
@@ -681,7 +713,7 @@ export async function createFinding(formData: FormData) {
 }
 
 export async function updateFindingStatus(formData: FormData) {
-  await requirePrototypeSession();
+  await requireSectionAccess("findings");
   const parsed = findingStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/findings?error=invalid");
   await prisma.finding.update({ where: { id: parsed.data.id }, data: { status: parsed.data.status } });
@@ -689,15 +721,15 @@ export async function updateFindingStatus(formData: FormData) {
 }
 
 export async function createPortfolioProject(formData: FormData) {
-  const session = await requirePrototypeSession();
-  const parsed = portfolioProjectSchema.safeParse(Object.fromEntries(formData));
+  const session = await requireSectionAccess("portfolio");
+  const parsed = portfolioProjectSchema.safeParse({ ...Object.fromEntries(formData), category: formData.getAll("category") });
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
   const media = await preparePortfolioMedia(formData, session.userId);
   if (!media) redirect("/dashboard/portfolio?error=media");
   const project = await prisma.portfolioProject.create({
     data: {
       title: parsed.data.title,
-      category: parsed.data.category,
+      category: parsed.data.category.join(", "),
       location: parsed.data.location || null,
       summary: parsed.data.summary,
       completionYear: typeof parsed.data.completionYear === "number" ? parsed.data.completionYear : null,
@@ -711,7 +743,7 @@ export async function createPortfolioProject(formData: FormData) {
 }
 
 export async function addPortfolioProjectMedia(formData: FormData) {
-  const session = await requirePrototypeSession();
+  const session = await requireSectionAccess("portfolio");
   const parsed = portfolioProjectMediaSchema.safeParse({ id: formData.get("id") });
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
   const media = await preparePortfolioMedia(formData, session.userId);
@@ -729,7 +761,7 @@ export async function addPortfolioProjectMedia(formData: FormData) {
 }
 
 export async function setPortfolioProjectPublished(formData: FormData) {
-  await requirePrototypeSession();
+  await requireSectionAccess("portfolio");
   const parsed = portfolioProjectStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
   await prisma.portfolioProject.update({ where: { id: parsed.data.id }, data: { isPublished: parsed.data.isPublished === "true" } });
@@ -738,7 +770,7 @@ export async function setPortfolioProjectPublished(formData: FormData) {
 }
 
 export async function deletePortfolioProject(formData: FormData) {
-  const actor = await requirePrototypeAdminSession();
+  const actor = await requireSectionAccess("portfolio");
   const parsed = portfolioProjectDeleteSchema.safeParse({ id: formData.get("id") });
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
 
@@ -766,6 +798,66 @@ export async function deletePortfolioProject(formData: FormData) {
   redirect("/dashboard/portfolio?deleted=1");
 }
 
+export async function deletePortfolioProjects(formData: FormData) {
+  const actor = await requireSectionAccess("portfolio");
+  const mode = formData.get("mode");
+  if (mode !== "selected" && mode !== "all") redirect("/dashboard/portfolio?error=invalid");
+
+  let projects: { id: string; title: string }[];
+  if (mode === "all") {
+    projects = await prisma.portfolioProject.findMany({ select: { id: true, title: true } });
+  } else {
+    const submittedIds = formData.getAll("projectIds");
+    if (submittedIds.some((id) => typeof id !== "string" || id.length === 0)) redirect("/dashboard/portfolio?error=invalid");
+    const ids = [...new Set(submittedIds as string[])];
+    if (ids.length === 0) redirect("/dashboard/portfolio?error=invalid");
+    projects = await prisma.portfolioProject.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } });
+    if (projects.length !== ids.length) redirect("/dashboard/portfolio?error=notfound");
+  }
+
+  if (projects.length > 0) {
+    await prisma.$transaction([
+      ...projects.map((project) => prisma.auditLog.create({
+        data: { actorId: actor.userId, action: "deleted", entityType: "PortfolioProject", entityId: project.id, summary: `Deleted portfolio project ${project.title}` },
+      })),
+      prisma.portfolioProject.deleteMany({ where: { id: { in: projects.map((project) => project.id) } } }),
+    ]);
+  }
+
+  revalidatePath("/portfolio");
+  revalidatePath("/dashboard/portfolio");
+  redirect(`/dashboard/portfolio?deleted=${projects.length}`);
+}
+
+const optionalText = (max: number) => z.string().trim().max(max).transform((value) => value || null);
+const companyProfileSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  address: optionalText(300),
+  email: z.union([z.literal(""), z.email()]).transform((value) => value || null),
+  phone: optionalText(40),
+  quotePrefix: z.string().trim().min(1).max(10).regex(/^[A-Za-z0-9-]+$/),
+  defaultTaxRate: z.coerce.number().min(0).max(100),
+  quoteValidityDays: z.coerce.number().int().min(1).max(365),
+});
+
+export async function updateCompanyProfile(formData: FormData) {
+  const actor = await requireSectionAccess("company-profile");
+  const parsed = companyProfileSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/dashboard/settings?profile=invalid");
+  const { name, address, email, phone, quotePrefix, defaultTaxRate, quoteValidityDays } = parsed.data;
+
+  await prisma.$transaction([
+    prisma.companySettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
+    prisma.companyProfile.upsert({ where: { companyId: 1 }, create: { companyId: 1, name, address, email, phone }, update: { name, address, email, phone } }),
+    prisma.documentSettings.upsert({ where: { companyId: 1 }, create: { companyId: 1, quotePrefix, defaultTaxRate, quoteValidityDays }, update: { quotePrefix, defaultTaxRate, quoteValidityDays } }),
+  ]);
+  await prisma.auditLog.create({
+    data: { actorId: actor.userId, action: "updated", entityType: "CompanyProfile", entityId: "1", summary: `Updated company profile for ${name}` },
+  });
+  revalidatePath("/", "layout");
+  redirect("/dashboard/settings?profile=saved");
+}
+
 const whatsappSchema = z.object({
   number: z.string().trim().max(40),
   message: z.string().trim().max(500),
@@ -776,13 +868,13 @@ export async function updateWhatsappSettings(formData: FormData) {
   const parsed = whatsappSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/settings?whatsapp=invalid");
 
-  // An empty number switches the floating button off.
+  // An empty number restores the published company contact number fallback.
   const number = parsed.data.number === "" ? null : normalizeWhatsappNumber(parsed.data.number);
   if (parsed.data.number !== "" && !number) redirect("/dashboard/settings?whatsapp=invalid");
 
   await prisma.companyProfile.update({ where: { companyId: 1 }, data: { whatsappNumber: number, whatsappMessage: parsed.data.message || null } });
   await prisma.auditLog.create({
-    data: { actorId: actor.userId, action: "updated", entityType: "CompanyProfile", entityId: "1", summary: number ? `Set WhatsApp number to ${number}` : "Turned off the WhatsApp button" },
+    data: { actorId: actor.userId, action: "updated", entityType: "CompanyProfile", entityId: "1", summary: number ? `Set WhatsApp number to ${number}` : "Reset WhatsApp number to the published company contact" },
   });
   revalidatePath("/", "layout");
   redirect("/dashboard/settings?whatsapp=saved");

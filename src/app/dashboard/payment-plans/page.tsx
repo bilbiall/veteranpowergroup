@@ -2,12 +2,12 @@ import { createSchoolPlanQuotation } from "@/app/dashboard/actions";
 import { SchoolPriceFields } from "@/app/dashboard/payment-plans/school-price-fields";
 import { getPlanStageAmounts, schoolPaymentPlans } from "@/lib/school-payment-plans";
 import { prisma } from "@/lib/prisma";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 
 const kes = (amount: number) => `KES ${amount.toLocaleString("en", { maximumFractionDigits: 2 })}`;
 
 export default async function SchoolPaymentPlansPage({ searchParams }: PageProps<"/dashboard/payment-plans">) {
-  await requirePrototypeSession();
+  await requireSectionAccess("payment-plans");
   const params = await searchParams;
   const customers = await prisma.customer.findMany({ orderBy: { name: "asc" }, select: { name: true, company: true } });
   const suggestions = [...new Set(customers.map((customer) => customer.company || customer.name).filter(Boolean))];

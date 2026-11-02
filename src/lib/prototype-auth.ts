@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { firstAllowedHref, isStaffAccessKey, staffAccessKeys, type StaffAccessKey } from "@/lib/staff-sections";
 
 const cookieName = "northstar_staff_session";
 const sessionLifetimeSeconds = 60 * 60 * 8;
@@ -129,6 +130,30 @@ export async function isPrototypeAdministrator(userId: string) {
     select: { role: { select: { name: true } } },
   });
   return adminRole?.role.name === adminRoleName;
+}
+
+export type StaffAccess = { isAdmin: boolean; sections: StaffAccessKey[] };
+
+export async function getStaffAccess(userId: string): Promise<StaffAccess> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { sectionAccess: true, roles: { select: { role: { select: { name: true } } } } },
+  });
+  const isAdmin = Boolean(user?.roles.some(({ role }) => role.name === adminRoleName));
+  return { isAdmin, sections: isAdmin ? [...staffAccessKeys] : (user?.sectionAccess ?? []).filter(isStaffAccessKey) };
+}
+
+export function redirectToAllowedSection(access: StaffAccess): never {
+  const href = firstAllowedHref(access.sections);
+  if (!href) redirect("/login?error=access");
+  redirect(`${href}?access=denied`);
+}
+
+export async function requireSectionAccess(section: StaffAccessKey) {
+  const session = await requirePrototypeSession();
+  const access = await getStaffAccess(session.userId);
+  if (!access.sections.includes(section)) redirectToAllowedSection(access);
+  return session;
 }
 
 export async function clearPrototypeSession() {

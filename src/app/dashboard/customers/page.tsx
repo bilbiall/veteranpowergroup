@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { createCustomer } from "@/app/dashboard/actions";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 
 export default async function CustomersPage({ searchParams }: PageProps<"/dashboard/customers">) {
   const params = await searchParams;
-  await requirePrototypeSession();
+  await requireSectionAccess("customers");
   const customers = await prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, company: true, email: true, phone: true, _count: { select: { documents: true } } } });
   return <main className="dashboard-main">
     <header className="page-title"><div><p className="eyebrow">Workspace</p><h1>Customers</h1><p className="dashboard-note">Fictional sample records for the prototype.</p></div><span className="prototype-badge">{customers.length} records</span></header>

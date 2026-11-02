@@ -98,6 +98,7 @@ model User {
   email        String     @unique
   passwordHash String?
   sessionVersion Int      @default(0)
+  sectionAccess String[]  @default([])
   status       UserStatus @default(ACTIVE)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

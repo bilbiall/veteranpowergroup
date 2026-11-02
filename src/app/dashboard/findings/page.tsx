@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { createFinding, updateFindingStatus } from "@/app/dashboard/actions";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 
 export default async function FindingsPage({ searchParams }: PageProps<"/dashboard/findings">) {
-  await requirePrototypeSession();
+  await requireSectionAccess("findings");
   const params = await searchParams;
   const findings = await prisma.finding.findMany({ orderBy: [{ status: "asc" }, { createdAt: "desc" }] });
   return <main className="dashboard-main">

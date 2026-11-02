@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 import { updateProspectStatus } from "@/app/dashboard/actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProspectsPage({ searchParams }: PageProps<"/dashboard/prospects">) {
-  await requirePrototypeSession();
+  await requireSectionAccess("prospects");
   const params = await searchParams;
   const prospects = await prisma.prospect.findMany({ orderBy: { createdAt: "desc" } });
   return <main className="dashboard-main">

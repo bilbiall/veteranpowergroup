@@ -6,15 +6,18 @@ import CustomerSelectEnhancer from "@/components/customer-select-enhancer";
 import ReceiptDetailsEditor from "@/components/receipt-details-editor";
 import { createInstallmentInvoices, issueInvoice, recordInvoicePayment, updateQuotationOrInvoice } from "@/app/dashboard/actions";
 import { documentStatus, documentTypeLabel, findExportDocument, formatDocumentCurrency, formatDocumentNumber, receiptPaymentSummary } from "@/lib/document-export-data";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
+import { documentSection } from "@/lib/staff-sections";
 import { prisma } from "@/lib/prisma";
 
 export default async function DocumentDetailPage({ params, searchParams }: PageProps<"/dashboard/documents/[id]">) {
-  await requirePrototypeSession();
   const { id } = await params;
   const query = await searchParams;
   const document = await findExportDocument(id);
   if (!document) notFound();
+  const section = documentSection(document.type);
+  if (!section) notFound();
+  await requireSectionAccess(section);
   const editable = document.type === "QUOTATION" ? document.derivedDocuments.length === 0 : document.type === "INVOICE" ? document.payments.length === 0 && document.invoiceStatus !== "VOID" : false;
   const customers = editable ? await prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, company: true } }) : [];
 

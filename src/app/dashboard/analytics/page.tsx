@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 
 function getThirtyDayCutoff() {
   return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 }
 
 export default async function AnalyticsPage() {
-  await requirePrototypeSession();
+  await requireSectionAccess("analytics");
   const since = getThirtyDayCutoff();
   const [allTimeViews, visits] = await Promise.all([
     prisma.websiteVisit.count(),

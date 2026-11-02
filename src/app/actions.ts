@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 const prospectSchema = z.object({
@@ -21,15 +22,22 @@ export async function submitWebsiteEnquiry(formData: FormData) {
   if (!parsed.success) redirect("/?contact=invalid#contact");
   if (parsed.data.website) redirect("/?contact=sent#contact");
 
-  await prisma.prospect.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email || null,
-      phone: parsed.data.phone || null,
-      company: parsed.data.company || null,
-      serviceInterest: parsed.data.serviceInterest?.join(", ") || null,
-      message: parsed.data.message,
-    },
-  });
+  try {
+    await prisma.prospect.create({
+      data: {
+        name: parsed.data.name,
+        email: parsed.data.email || null,
+        phone: parsed.data.phone || null,
+        company: parsed.data.company || null,
+        serviceInterest: parsed.data.serviceInterest?.join(", ") || null,
+        message: parsed.data.message,
+      },
+    });
+  } catch (error) {
+    console.error("Unable to save website enquiry", error);
+    redirect("/?contact=failed#contact");
+  }
+  revalidatePath("/dashboard/prospects");
+  revalidatePath("/dashboard");
   redirect("/?contact=sent#contact");
 }

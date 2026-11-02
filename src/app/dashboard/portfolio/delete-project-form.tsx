@@ -18,8 +18,8 @@ export function DeleteProjectForm({ action, projectId, projectTitle }: DeletePro
   return (
     <form action={action} onSubmit={confirmDelete}>
       <input type="hidden" name="id" value={projectId} />
-      <button className="account-status is-disabled" type="submit" aria-label={`Delete ${projectTitle}`}>
-        Delete
+      <button className="portfolio-delete-button" type="submit" aria-label={`Delete ${projectTitle}`}>
+        Delete project
       </button>
     </form>
   );

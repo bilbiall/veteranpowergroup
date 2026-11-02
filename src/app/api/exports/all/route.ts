@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
-import { getPrototypeSession } from "@/lib/prototype-auth";
+import { getPrototypeSession, getStaffAccess } from "@/lib/prototype-auth";
 
 export const runtime = "nodejs";
 
@@ -18,6 +18,8 @@ function addSheet(workbook: ExcelJS.Workbook, name: string, columns: string[], r
 export async function GET() {
   const session = await getPrototypeSession();
   if (!session) return Response.json({ error: "Authentication required" }, { status: 401 });
+  const access = await getStaffAccess(session.userId);
+  if (!access.sections.includes("reports")) return Response.json({ error: "Access denied" }, { status: 403 });
 
   const [prospects, findings, documents, pageViews, referralViews, totalViews] = await Promise.all([
     prisma.prospect.findMany({ orderBy: { createdAt: "desc" } }),

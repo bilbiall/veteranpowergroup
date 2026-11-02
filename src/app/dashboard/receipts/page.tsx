@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { createReceipt } from "@/app/dashboard/actions";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 import Link from "next/link";
 import { formatDocumentCurrency } from "@/lib/document-export-data";
 import CustomerSelectEnhancer from "@/components/customer-select-enhancer";
 
 export default async function ReceiptsPage({ searchParams }: PageProps<"/dashboard/receipts">) {
   const params = await searchParams;
-  await requirePrototypeSession();
+  await requireSectionAccess("receipts");
   const [customers, sources, receipts] = await Promise.all([
     prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, company: true } }),
     prisma.document.findMany({ where: { type: { in: ["INVOICE", "QUOTATION"] } }, orderBy: { createdAt: "desc" }, include: { payments: { select: { amount: true } }, derivedDocuments: { where: { type: "INVOICE" }, select: { id: true } } } }),

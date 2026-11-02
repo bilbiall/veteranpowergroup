@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requirePrototypeSession } from "@/lib/prototype-auth";
+import { requireSectionAccess } from "@/lib/prototype-auth";
 
 const numberFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 0 });
 const amountFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 
 export default async function Dashboard() {
-  await requirePrototypeSession();
+  await requireSectionAccess("dashboard");
   const since = new Date();
   since.setMonth(since.getMonth() - 5, 1);
   since.setHours(0, 0, 0, 0);
