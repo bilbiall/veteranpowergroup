@@ -189,18 +189,19 @@ td { color: var(--ink); }
 .website-honeypot { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 .contact-feedback { background: #e8f1d2; color: #304b24; font-size: 13px; line-height: 1.5; padding: 14px 16px; }
 .solution-main, .portfolio-main { margin: 0 auto; max-width: 1320px; min-height: 65vh; padding: 105px 40px 120px; }
-.site-shell-portfolio { background: #000; color: #fff; }
-.site-shell-portfolio > .site-header, .site-shell-portfolio > .site-footer { background: #000; }
+.site-shell-portfolio { background: transparent; color: #fff; }
+.site-shell-portfolio > .site-header, .site-shell-portfolio > .site-footer { background: rgba(15,21,18,.82); }
 .site-shell-portfolio > .site-footer { color: #d2d2d2; }
 .site-shell-portfolio > .site-footer .brand { color: #fff; }
 .portfolio-main { max-width: none; }
 .solution-main > h1, .portfolio-main > h1 { font-size: clamp(52px, 7vw, 88px); font-weight: 500; }
 .solution-intro, .portfolio-intro { color: var(--muted); font-size: 18px; line-height: 1.65; margin: 25px 0 55px; max-width: 660px; }
-.portfolio-heading { background: #000; color: #fff; margin-bottom: 48px; max-width: 760px; padding: clamp(26px, 4vw, 42px); }
+.portfolio-heading { background: rgba(15,21,18,.78); color: #fff; margin-bottom: 48px; max-width: 760px; padding: clamp(26px, 4vw, 42px); }
 .portfolio-heading h1 { color: #fff; font-size: clamp(48px, 7vw, 82px); }
 .portfolio-heading .eyebrow { color: #d5e981; }
 .portfolio-heading .portfolio-intro { color: #e2ebe5; margin: 18px 0 0; }
 .portfolio-main .public-media-heading > p { color: #d2d2d2; }
+.portfolio-main .public-media-section { background: rgba(15,21,18,.78); padding: 28px; }
 .solution-columns { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; }
 .solution-media-layout:not(.no-media) { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .solution-media-layout:not(.no-media) .solution-columns { grid-template-columns: 1fr; }
@@ -211,11 +212,11 @@ td { color: var(--ink); }
 .solution-panel ul { display: grid; gap: 16px; list-style: none; margin: 30px 0 0; padding: 0; }
 .solution-panel li { border-top: 1px solid var(--line); color: var(--muted); line-height: 1.55; padding-top: 14px; }
 .solution-contact { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; margin-top: 45px; padding-top: 28px; }
-.portfolio-empty { background: #000; border: 1px solid #303030; color: #fff; margin-top: 55px; max-width: 760px; padding: 44px; }
+.portfolio-empty { background: rgba(15,21,18,.78); border: 1px solid rgba(255,255,255,.18); color: #fff; margin-top: 55px; max-width: 760px; padding: 44px; }
 .portfolio-empty h2 { font-size: 28px; font-weight: 500; }
 .portfolio-empty p { color: #dedede; line-height: 1.6; margin: 12px 0 24px; }
 .live-project-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.live-project-card { background: #000; border: 1px solid #303030; color: #fff; min-height: 285px; padding: 30px; }
+.live-project-card { background: rgba(15,21,18,.78); border: 1px solid rgba(255,255,255,.18); color: #fff; min-height: 285px; padding: 30px; }
 .live-project-meta { color: var(--lime); display: flex; font-size: 11px; justify-content: space-between; letter-spacing: .08em; text-transform: uppercase; }
 .live-project-card h2 { font-size: 34px; font-weight: 500; margin-top: 65px; }
 .live-project-card p { color: #d2d9d4; font-size: 14px; line-height: 1.6; max-width: 560px; }
@@ -449,10 +450,10 @@ td { color: var(--ink); }
 :root[data-theme="dark"] .use-case-card,
 :root[data-theme="dark"] .report-sheet-grid article { background: #1d2621; }
 :root[data-theme="dark"] .site-shell-portfolio > .site-header,
-:root[data-theme="dark"] .site-shell-portfolio > .site-footer { background: #000; }
+:root[data-theme="dark"] .site-shell-portfolio > .site-footer { background: rgba(15,21,18,.82); }
 :root[data-theme="dark"] .portfolio-heading,
 :root[data-theme="dark"] .portfolio-empty,
-:root[data-theme="dark"] .live-project-card { background: #000; color: #fff; }
+:root[data-theme="dark"] .live-project-card { background: rgba(15,21,18,.78); color: #fff; }
 :root[data-theme="dark"] .live-project-card p,
 :root[data-theme="dark"] .portfolio-project-media-item figcaption { color: #e2ebe5; }
 :root[data-theme="dark"] .solution-panel-accent,
