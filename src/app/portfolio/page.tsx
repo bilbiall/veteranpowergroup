@@ -32,7 +32,7 @@ export default async function PortfolioPage() {
     listPublicMedia(mediaFolders.reports),
     getCompanyProfileSummary(),
   ]);
-  return <div className="site-shell">
+  return <div className="site-shell site-shell-portfolio">
     <WebsiteVisitTracker />
     <WhatsAppButton />
     <PublicSiteHeader />
