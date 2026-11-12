@@ -36,7 +36,7 @@ export default async function PortfolioPage() {
     <WebsiteVisitTracker />
     <WhatsAppButton />
     <PublicSiteHeader />
-    <main className="portfolio-main"><p className="eyebrow">Projects and portfolio</p><h1>Work in the field.</h1><p className="portfolio-intro">A look at projects completed by Veteran Power Solutions Limited.</p>
+    <main className="portfolio-main"><header className="portfolio-heading"><p className="eyebrow">Projects and portfolio</p><h1>Work in the field.</h1><p className="portfolio-intro">A look at projects completed by Veteran Power Solutions Limited.</p></header>
       {projects.length === 0 ? <section className="portfolio-empty"><h2>Projects are being added.</h2><p>Contact our team to discuss a power, solar, or borehole solution for your site.</p><Link className="button button-primary" href="/#contact">Contact us <span aria-hidden="true">→</span></Link></section> : <div className="live-project-grid">{projects.map((project) => <article className="live-project-card" key={project.id}>
         <div className="live-project-meta"><span>{project.category}</span>{project.completionYear && <span>{project.completionYear}</span>}</div>
         <h2>{project.title}</h2><p>{project.summary}</p>{project.location && <span className="live-project-location">{project.location}</span>}

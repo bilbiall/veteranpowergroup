@@ -191,6 +191,10 @@ td { color: var(--ink); }
 .solution-main, .portfolio-main { margin: 0 auto; max-width: 1320px; min-height: 65vh; padding: 105px 40px 120px; }
 .solution-main > h1, .portfolio-main > h1 { font-size: clamp(52px, 7vw, 88px); font-weight: 500; }
 .solution-intro, .portfolio-intro { color: var(--muted); font-size: 18px; line-height: 1.65; margin: 25px 0 55px; max-width: 660px; }
+.portfolio-heading { background: rgba(14, 35, 25, .94); box-shadow: 0 18px 48px rgba(10, 27, 18, .2); color: #f5f8f5; margin-bottom: 48px; max-width: 760px; padding: clamp(26px, 4vw, 42px); }
+.portfolio-heading h1 { color: #fff; font-size: clamp(48px, 7vw, 82px); }
+.portfolio-heading .eyebrow { color: #d5e981; }
+.portfolio-heading .portfolio-intro { color: #e2ebe5; margin: 18px 0 0; }
 .solution-columns { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; }
 .solution-media-layout:not(.no-media) { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .solution-media-layout:not(.no-media) .solution-columns { grid-template-columns: 1fr; }
@@ -205,7 +209,7 @@ td { color: var(--ink); }
 .portfolio-empty h2 { font-size: 28px; font-weight: 500; }
 .portfolio-empty p { color: var(--muted); line-height: 1.6; margin: 12px 0 24px; }
 .live-project-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.live-project-card { background: var(--ink); color: white; min-height: 285px; padding: 30px; }
+.live-project-card { background: #14251c; color: #fff; min-height: 285px; padding: 30px; }
 .live-project-meta { color: var(--lime); display: flex; font-size: 11px; justify-content: space-between; letter-spacing: .08em; text-transform: uppercase; }
 .live-project-card h2 { font-size: 34px; font-weight: 500; margin-top: 65px; }
 .live-project-card p { color: #d2d9d4; font-size: 14px; line-height: 1.6; max-width: 560px; }
@@ -438,10 +442,10 @@ td { color: var(--ink); }
 :root[data-theme="dark"] .why-section,
 :root[data-theme="dark"] .use-case-card,
 :root[data-theme="dark"] .report-sheet-grid article { background: #1d2621; }
-:root[data-theme="dark"] .portfolio-main > .portfolio-intro { color: #e0e8e2; }
-:root[data-theme="dark"] .live-project-card { background: #202823; color: var(--foreground); }
+:root[data-theme="dark"] .portfolio-heading { background: rgba(14, 35, 25, .96); }
+:root[data-theme="dark"] .live-project-card { background: #14251c; color: #fff; }
 :root[data-theme="dark"] .live-project-card p,
-:root[data-theme="dark"] .portfolio-project-media-item figcaption { color: #d0dbd3; }
+:root[data-theme="dark"] .portfolio-project-media-item figcaption { color: #e2ebe5; }
 :root[data-theme="dark"] .solution-panel-accent,
 :root[data-theme="dark"] .portfolio-empty,
 :root[data-theme="dark"] .document-reference-numbers,
