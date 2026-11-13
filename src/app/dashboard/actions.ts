@@ -697,6 +697,57 @@ export async function deleteDocumentRecord(formData: FormData) {
   redirect(`/dashboard/${result.type.toLowerCase()}s?deleted=1`);
 }
 
+export async function bulkDeleteDocuments(formData: FormData) {
+  const typeValue = String(formData.get("documentType") ?? "");
+  const type = z.enum(["QUOTATION", "INVOICE", "RECEIPT"]).safeParse(typeValue);
+  const requiredSection = type.success ? documentSection(type.data) : null;
+  if (!type.success || !requiredSection) redirect("/dashboard/quotations?bulk=invalid");
+  const actor = await requireSectionAccess(requiredSection);
+  const documentIds = [...new Set(formData.getAll("documentIds").map(String).filter(Boolean))].slice(0, 100);
+  const path = `/dashboard/${type.data.toLowerCase()}s`;
+  if (!documentIds.length) redirect(`${path}?bulk=none`);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const documents = await tx.document.findMany({
+      where: { id: { in: documentIds }, type: type.data },
+      include: {
+        payment: true,
+        payments: { select: { amount: true } },
+        derivedDocuments: { select: { id: true } },
+        etims: { select: { id: true } },
+      },
+    });
+    const deletable = documents.filter((document) => !document.etims.length && (
+      document.type === "RECEIPT" || (!document.payments.length && !document.derivedDocuments.length)
+    ));
+    if (!deletable.length) return { deleted: 0, blocked: documentIds.length };
+
+    const payments = deletable.map((document) => document.payment).filter((payment) => payment !== null);
+    const sourceInvoiceIds = [...new Set(payments.map((payment) => payment.documentId).filter((id): id is string => Boolean(id)))];
+    if (payments.length) await tx.payment.deleteMany({ where: { id: { in: payments.map((payment) => payment.id) } } });
+
+    for (const sourceId of sourceInvoiceIds) {
+      const source = await tx.document.findUnique({ where: { id: sourceId }, include: { payments: { select: { amount: true } } } });
+      if (source?.type === "INVOICE") {
+        const paid = source.payments.reduce((sum, payment) => sum + payment.amount, 0);
+        const invoiceStatus = paid >= source.total - 0.005 ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED";
+        await tx.document.update({ where: { id: source.id }, data: { invoiceStatus } });
+      }
+    }
+
+    await tx.document.deleteMany({ where: { id: { in: deletable.map((document) => document.id) } } });
+    for (const document of deletable) {
+      await tx.auditLog.create({ data: { actorId: actor.userId, action: "deleted", entityType: document.type, entityId: document.id, summary: `Deleted ${document.type.toLowerCase()} ${document.number}` } });
+    }
+    return { deleted: deletable.length, blocked: documentIds.length - deletable.length };
+  });
+
+  revalidatePath("/dashboard/quotations");
+  revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard/receipts");
+  redirect(`${path}?bulk=deleted&count=${result.deleted}&blocked=${result.blocked}`);
+}
+
 export async function createStaffAccount(formData: FormData) {
   const actor = await requireStaffManagementSession();
   const parsed = staffAccountSchema.safeParse(Object.fromEntries(formData));
