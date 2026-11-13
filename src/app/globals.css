@@ -339,6 +339,9 @@ td { color: var(--ink); }
 .danger-button { background: #a84532; border: 1px solid #a84532; color: #fff; cursor: pointer; font: inherit; font-size: 12px; min-height: 40px; padding: 0 18px; }
 .danger-button:hover { background: #853a2b; }
 .danger-button:disabled { cursor: not-allowed; opacity: .55; }
+.table-delete-button { background: transparent; border: 1px solid #a84532; color: #d16f5a; cursor: pointer; font: inherit; font-size: 12px; padding: 6px 10px; }
+.table-delete-button:hover { background: #a84532; color: #fff; }
+.table-delete-button:disabled { cursor: not-allowed; opacity: .45; }
 form[aria-busy="true"] button[type="submit"] { cursor: wait; opacity: .72; }
 @media (max-width: 760px) { .document-delete-panel { align-items: stretch; flex-direction: column; } .document-delete-panel form, .document-delete-panel .danger-button { width: 100%; } }
 .document-edit-form { display: grid; gap: 14px; }
