@@ -58,14 +58,28 @@ function relatedDocumentLines(document: ExportDocument) {
   return lines;
 }
 
-function institutionLogo(document: ExportDocument) {
-  return document.media.find((item) => item.title?.endsWith(" logo") && item.url.startsWith("data:image/"))
-    ?? document.customer.media.find((item) => item.title?.endsWith(" logo") && item.url.startsWith("data:image/"));
+function companyLogo(document: ExportDocument) {
+  return document.company.branding?.logo ?? {
+    filename: "veteran-power-solutions-logo.jpeg",
+    mimeType: "image/jpeg",
+    url: "/veteran-power-solutions-logo.jpeg",
+  };
 }
 
 function logoBytes(url: string) {
+  if (url.startsWith("/")) return readFileSync(path.join(process.cwd(), "public", url.slice(1)));
+  if (!url.startsWith("data:image/")) throw new Error("Company logo must be a data image or a public file.");
   const base64 = url.slice(url.indexOf(",") + 1);
   return Uint8Array.from(Buffer.from(base64, "base64"));
+}
+
+function companyLogoBytes(document: ExportDocument) {
+  const logo = companyLogo(document);
+  try {
+    return logoBytes(logo.url);
+  } catch {
+    return readFileSync(path.join(process.cwd(), "public", "veteran-power-solutions-logo.jpeg"));
+  }
 }
 
 function wordCell(value: string, bold = false) {
@@ -74,7 +88,7 @@ function wordCell(value: string, bold = false) {
 
 async function createWordDocument(document: ExportDocument) {
   const company = document.company.profile;
-  const schoolLogo = institutionLogo(document);
+  const logo = companyLogo(document);
   const companyContact = [company?.email, company?.phone].filter((value): value is string => Boolean(value));
   const rows = [
     new TableRow({ children: ["Description", "Qty", `Unit price (${document.currency})`, `Discount (${document.currency})`, `Tax (${document.currency})`, `Total (${document.currency})`].map((value) => wordCell(value, true)) }),
@@ -88,7 +102,7 @@ async function createWordDocument(document: ExportDocument) {
     ] })),
   ];
   const section = [
-    ...(schoolLogo ? [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: schoolLogo.mimeType === "image/png" ? "png" : "jpg", data: logoBytes(schoolLogo.url).buffer as ArrayBuffer, transformation: { width: 120, height: 72 } })] })] : []),
+    new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: logo.mimeType === "image/png" ? "png" : "jpg", data: companyLogoBytes(document).buffer as ArrayBuffer, transformation: { width: 190, height: 68 } })] }),
     new Paragraph({ text: company?.name ?? "Company details to be confirmed", heading: HeadingLevel.HEADING_2 }),
     ...(company?.address ? [new Paragraph(company.address)] : []),
     ...(companyContact.length ? [new Paragraph(companyContact.join(" · "))] : []),
@@ -144,8 +158,8 @@ async function createWordDocument(document: ExportDocument) {
 async function createSpreadsheet(document: ExportDocument) {
   const workbook = new ExcelJS.Workbook();
   const watermarkId = workbook.addImage({ base64: getWatermark().toString("base64"), extension: "png" });
-  const schoolLogo = institutionLogo(document);
-  const schoolLogoId = schoolLogo ? workbook.addImage({ base64: schoolLogo.url.slice(schoolLogo.url.indexOf(",") + 1), extension: schoolLogo.mimeType === "image/png" ? "png" : "jpeg" }) : null;
+  const logo = companyLogo(document);
+  const logoId = workbook.addImage({ base64: companyLogoBytes(document).toString("base64"), extension: logo.mimeType === "image/png" ? "png" : "jpeg" });
   workbook.creator = document.company.profile?.name ?? "Veteran Power Solutions Limited";
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Document", { views: [{ state: "frozen", ySplit: 9 }] });
@@ -164,7 +178,7 @@ async function createSpreadsheet(document: ExportDocument) {
   sheet.mergeCells("A2:E2");
   sheet.getCell("A2").value = documentTitle(document);
   sheet.getCell("A2").font = { bold: true, size: 14 };
-  if (schoolLogoId !== null) sheet.addImage(schoolLogoId, "F1:G2");
+  sheet.addImage(logoId, "F1:G2");
   sheet.addRow(document.type === "QUOTATION"
     ? ["Date", document.createdAt, "Currency", document.currency]
     : ["Status", documentStatus(document), "Date", document.createdAt, "Currency", document.currency]);
@@ -212,7 +226,6 @@ async function createSpreadsheet(document: ExportDocument) {
 async function createPdf(document: ExportDocument) {
   return new Promise<Buffer>((resolve, reject) => {
     const pdf = new PDFDocument({ size: "A4", margin: 48, info: { Title: documentTitle(document), Author: document.company.profile?.name ?? "Veteran Power Solutions Limited" } });
-    const schoolLogo = institutionLogo(document);
     const watermark = getWatermark();
     const drawWatermark = () => {
       pdf.save().opacity(1).image(watermark, 66, 338, { fit: [463, 166], align: "center", valign: "center" }).restore();
@@ -234,7 +247,7 @@ async function createPdf(document: ExportDocument) {
     const contact = [document.company.profile?.email, document.company.profile?.phone].filter(Boolean).join(" · ");
     if (contact) pdf.text(contact);
     if (document.company.profile?.taxInformation) pdf.text(`Tax information: ${document.company.profile.taxInformation}`);
-    if (schoolLogo) pdf.image(Buffer.from(logoBytes(schoolLogo.url)), 408, 42, { fit: [138, 72], align: "center", valign: "center" });
+    pdf.image(Buffer.from(companyLogoBytes(document)), 408, 42, { fit: [138, 72], align: "center", valign: "center" });
     pdf.moveDown(1.6).fillColor("#202a27").font("Helvetica-Bold").fontSize(24).text(documentTitle(document));
     pdf.moveDown(0.5).font("Helvetica").fontSize(10).fillColor("#68716c").text(documentDateSummary(document));
     pdf.moveDown(1.4).fillColor("#202a27").font("Helvetica-Bold").fontSize(11).text("Bill to");

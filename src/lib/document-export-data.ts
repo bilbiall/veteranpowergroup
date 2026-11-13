@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export const exportDocumentInclude = {
   customer: { include: { media: { where: { caption: "Institution logo on school solution documents" }, select: { id: true, filename: true, url: true, mimeType: true, altText: true, title: true } } } },
-  company: { include: { profile: true, documents: true } },
+  company: { include: { profile: true, documents: true, branding: { include: { logo: true, watermark: true } } } },
   items: { orderBy: { sortOrder: "asc" } },
   sourceDocument: { include: {
     sourceDocument: { select: { id: true, number: true, type: true } },

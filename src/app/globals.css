@@ -114,11 +114,15 @@ td { color: var(--ink); }
 .export-button { align-items: center; background: var(--ink); color: white; display: inline-flex; font-size: 12px; gap: 14px; justify-content: space-between; min-width: 120px; padding: 13px 15px; text-decoration: none; }
 .export-button span { color: var(--lime); font-size: 10px; }
 .export-button:hover { background: var(--forest); }
-.document-preview { background: #fff; border: 1px solid var(--line); margin-top: 18px; padding: clamp(22px, 5vw, 48px); }
+.document-preview { background: #fff; border: 1px solid var(--line); isolation: isolate; margin-top: 18px; overflow: hidden; padding: clamp(22px, 5vw, 48px); position: relative; }
+.document-preview::before { background: url('/veteran-watermark.png') center 54% / min(82%, 560px) auto no-repeat; content: ""; inset: 0; opacity: .55; pointer-events: none; position: absolute; z-index: 0; }
+.document-preview > * { position: relative; z-index: 1; }
 .preview-company { align-items: start; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding-bottom: 28px; }
 .preview-company p { color: var(--muted); font-size: 11px; margin: 5px 0; }
 .preview-company .eyebrow { color: var(--ink); font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 600; letter-spacing: -.03em; margin: 0 0 10px; text-transform: none; }
 .preview-type { display: grid; gap: 5px; text-align: right; }
+.preview-company-brand { align-items: end; display: grid; gap: 12px; justify-items: end; }
+.preview-company-logo { background: #fff; height: auto; max-height: 62px; max-width: min(220px, 32vw); object-fit: contain; }
 .preview-type span { color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .preview-type strong { font-family: var(--font-space-grotesk); font-size: 18px; }
 .preview-type small { color: var(--muted); font-size: 10px; }
