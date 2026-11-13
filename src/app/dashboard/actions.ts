@@ -47,7 +47,7 @@ const customerSchema = z.object({
 
 const customerSelectionFields = {
   customerId: z.string().optional(),
-  newCustomerName: z.string().trim().min(2).max(120).optional(),
+  newCustomerName: z.string().trim().max(120).optional(),
   newCustomerCompany: z.string().trim().max(120).optional(),
   newCustomerEmail: z.union([z.literal(""), z.email()]).optional(),
   newCustomerPhone: z.string().trim().max(40).optional(),
@@ -55,9 +55,11 @@ const customerSelectionFields = {
 const customerSelectionSchema = z.object(customerSelectionFields);
 const quotationSchema = z.object({
   ...customerSelectionFields,
-  description: z.string().trim().min(2).max(250),
-  quantity: z.coerce.number().positive().max(100000),
-  unitPrice: z.coerce.number().nonnegative().max(100000000),
+  terms: z.string().trim().max(8000).optional(),
+}).refine((value) => value.customerId === "__new__" ? Boolean(value.newCustomerName && value.newCustomerName.length >= 2) : Boolean(value.customerId));
+const standaloneInvoiceSchema = z.object({
+  ...customerSelectionFields,
+  terms: z.string().trim().max(8000).optional(),
 }).refine((value) => value.customerId === "__new__" ? Boolean(value.newCustomerName && value.newCustomerName.length >= 2) : Boolean(value.customerId));
 const schoolPlanSchema = z.object({
   planId: z.string().min(1),
@@ -73,7 +75,7 @@ const schoolPlanSchema = z.object({
 });
 const documentIdSchema = z.object({ documentId: z.string().min(1) });
 const paymentSchema = z.object({ invoiceId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
-const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), ...customerSelectionFields, amount: z.coerce.number().positive().max(100000000), currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional(), description: z.string().trim().min(2).max(250) }).superRefine((value, context) => {
+const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), ...customerSelectionFields, currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() }).superRefine((value, context) => {
   if (value.sourceDocumentId && value.customerId === "__new__") {
     context.addIssue({ code: "custom", path: ["customerId"], message: "Linked receipts must use the source document customer" });
   } else if (!value.sourceDocumentId && (value.customerId === "__new__" ? !value.newCustomerName : !value.customerId)) {
@@ -82,6 +84,33 @@ const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), 
 });
 const receiptEditSchema = z.object({ documentId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
 const documentLineSchema = z.object({ itemId: z.string().optional(), description: z.string().trim().min(2).max(250), quantity: z.coerce.number().positive().max(100000), unitPrice: z.coerce.number().nonnegative().max(100000000), discount: z.coerce.number().nonnegative().max(100000000), taxRate: z.coerce.number().nonnegative().max(100) });
+
+function parseLineItems(formData: FormData, prefix = "") {
+  const fieldName = (name: string) => prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
+  const itemIds = formData.getAll(fieldName("itemId")).map(String);
+  const descriptions = formData.getAll(fieldName("description"));
+  const quantities = formData.getAll(fieldName("quantity"));
+  const unitPrices = formData.getAll(fieldName("unitPrice"));
+  const discounts = formData.getAll(fieldName("discount"));
+  const taxRates = formData.getAll(fieldName("taxRate"));
+  const fields = [itemIds, descriptions, quantities, unitPrices, discounts, taxRates];
+  if (!itemIds.length || itemIds.length > 100 || fields.some((values) => values.length !== itemIds.length)) return null;
+  const rows = itemIds.map((itemId, index) => documentLineSchema.safeParse({
+    itemId: itemId || undefined,
+    description: String(descriptions[index] ?? "").trim(),
+    quantity: quantities[index],
+    unitPrice: unitPrices[index],
+    discount: discounts[index],
+    taxRate: taxRates[index],
+  }));
+  if (rows.some((row) => !row.success || row.data.discount > row.data.quantity * row.data.unitPrice)) return null;
+  return rows.map((row, sortOrder) => {
+    if (!row.success) return null;
+    const amount = Math.round((row.data.quantity * row.data.unitPrice - row.data.discount) * 100) / 100;
+    const taxAmount = Math.round(amount * row.data.taxRate) / 100;
+    return { ...row.data, amount, taxAmount, total: Math.round((amount + taxAmount) * 100) / 100, sortOrder };
+  }).filter((row): row is NonNullable<typeof row> => row !== null);
+}
 
 async function nextDocumentNumber(tx: Prisma.TransactionClient, type: "QUOTATION" | "INVOICE" | "RECEIPT", year: number) {
   const settings = await tx.documentSettings.findUnique({ where: { companyId: 1 }, select: { quotePrefix: true, invoicePrefix: true, receiptPrefix: true } });
@@ -183,7 +212,8 @@ export async function createCustomer(formData: FormData) {
 export async function createQuotation(formData: FormData) {
   const session = await requireSectionAccess("quotations");
   const parsed = quotationSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect("/dashboard/quotations?error=invalid");
+  const lineItems = parseLineItems(formData);
+  if (!parsed.success || !lineItems?.length) redirect("/dashboard/quotations?error=invalid");
   const owner = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
   const company = await prisma.companySettings.findUnique({ where: { id: 1 }, select: { id: true } });
   if (!owner || !company) redirect("/dashboard/quotations?error=setup");
@@ -193,7 +223,7 @@ export async function createQuotation(formData: FormData) {
     if (!customer) return null;
 
     const year = new Date().getFullYear();
-    const settings = await tx.documentSettings.findUnique({ where: { companyId: 1 }, select: { quotePrefix: true, defaultTaxRate: true } });
+    const settings = await tx.documentSettings.findUnique({ where: { companyId: 1 }, select: { quotePrefix: true } });
     const prefix = settings?.quotePrefix ?? "QUO";
     const sequence = await tx.documentNumberSequence.upsert({
       where: { companyId_type_year: { companyId: 1, type: "QUOTATION", year } },
@@ -202,17 +232,18 @@ export async function createQuotation(formData: FormData) {
       select: { nextValue: true },
     });
     const sequenceValue = sequence.nextValue - 1;
-    const subtotal = Math.round(parsed.data.quantity * parsed.data.unitPrice * 100) / 100;
-    const taxRate = settings?.defaultTaxRate ?? 0;
-    const tax = Math.round(subtotal * taxRate) / 100;
+    const rows = lineItems;
+    const subtotal = rows.reduce((sum, item) => Math.round((sum + item.amount) * 100) / 100, 0);
+    const tax = rows.reduce((sum, item) => Math.round((sum + item.taxAmount) * 100) / 100, 0);
     const total = Math.round((subtotal + tax) * 100) / 100;
     const number = `${prefix}-${year}-${String(sequenceValue).padStart(4, "0")}`;
 
     const document = await tx.document.create({
       data: {
         number, type: "QUOTATION", quotationStatus: "DRAFT", subtotal, tax, total,
+        currency: "KES", terms: parsed.data.terms || null,
         customerId: customer.customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue,
-        items: { create: { description: parsed.data.description, quantity: parsed.data.quantity, unitPrice: parsed.data.unitPrice, taxRate, amount: subtotal, taxAmount: tax, total } },
+        items: { create: rows.map((row) => { const item = { ...row }; delete item.itemId; return item; }) },
       },
       select: { id: true, number: true },
     });
@@ -227,6 +258,51 @@ export async function createQuotation(formData: FormData) {
     data: { actorId: owner.id, action: "created", entityType: "Quotation", entityId: result.id, summary: `Created draft quotation ${result.number}` },
   });
   redirect("/dashboard/quotations?created=1");
+}
+
+export async function createStandaloneInvoice(formData: FormData) {
+  const session = await requireSectionAccess("invoices");
+  const parsed = standaloneInvoiceSchema.safeParse(Object.fromEntries(formData));
+  const lineItems = parseLineItems(formData);
+  if (!parsed.success || !lineItems?.length) redirect("/dashboard/invoices?error=invalid");
+  const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
+  const company = await prisma.companySettings.findUnique({ where: { id: 1 }, select: { id: true } });
+  if (!actor || !company) redirect("/dashboard/invoices?error=setup");
+
+  const customerAndInvoice = await prisma.$transaction(async (tx) => {
+    const selectedCustomer = await resolveCustomer(tx, parsed.data);
+    if (!selectedCustomer) return null;
+    const subtotal = Math.round(lineItems.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+    const tax = Math.round(lineItems.reduce((sum, item) => sum + item.taxAmount, 0) * 100) / 100;
+    const year = new Date().getFullYear();
+    const number = await nextDocumentNumber(tx, "INVOICE", year);
+    const invoice = await tx.document.create({
+      data: {
+        number: number.number,
+        type: "INVOICE",
+        invoiceStatus: "DRAFT",
+        subtotal,
+        tax,
+        total: Math.round((subtotal + tax) * 100) / 100,
+        currency: "KES",
+        terms: parsed.data.terms || null,
+        customerId: selectedCustomer.customer.id,
+        ownerId: actor.id,
+        companyId: company.id,
+        sequenceYear: year,
+        sequenceValue: number.sequenceValue,
+        items: { create: lineItems.map((row) => { const item = { ...row }; delete item.itemId; return item; }) },
+      },
+      select: { id: true, number: true },
+    });
+    return { invoice, customer: selectedCustomer.customer, customerCreated: selectedCustomer.created };
+  });
+  if (!customerAndInvoice) redirect("/dashboard/invoices?error=customer");
+  if (customerAndInvoice.customerCreated) await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Customer", entityId: customerAndInvoice.customer.id, summary: `Created customer ${customerAndInvoice.customer.name} from an invoice` } });
+  await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Invoice", entityId: customerAndInvoice.invoice.id, summary: `Created standalone draft invoice ${customerAndInvoice.invoice.number}` } });
+  revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard/customers");
+  redirect(`/dashboard/documents/${customerAndInvoice.invoice.id}?invoice=created`);
 }
 
 export async function createSchoolPlanQuotation(formData: FormData) {
@@ -339,7 +415,12 @@ export async function recordInvoicePayment(formData: FormData) {
 export async function createReceipt(formData: FormData) {
   const session = await requireSectionAccess("receipts");
   const parsed = receiptCreateSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect("/dashboard/receipts?error=invalid");
+  const lineItems = parseLineItems(formData, "receipt");
+  if (!parsed.success || !lineItems?.length) redirect("/dashboard/receipts?error=invalid");
+  const subtotal = Math.round(lineItems.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+  const tax = Math.round(lineItems.reduce((sum, item) => sum + item.taxAmount, 0) * 100) / 100;
+  const amount = Math.round(lineItems.reduce((sum, item) => sum + item.total, 0) * 100) / 100;
+  if (amount <= 0) redirect("/dashboard/receipts?error=invalid");
   const actor = await prisma.user.findUnique({ where: { email: session.email }, select: { id: true } });
   if (!actor) redirect("/dashboard/receipts?error=setup");
 
@@ -355,7 +436,6 @@ export async function createReceipt(formData: FormData) {
     if (source?.type === "INVOICE" && !["ISSUED", "PARTIALLY_PAID"].includes(source.invoiceStatus ?? "")) return { error: "state" as const };
     if (source?.type === "QUOTATION" && source.derivedDocuments.length > 0) return { error: "invoiced" as const };
 
-    const amount = Math.round(parsed.data.amount * 100) / 100;
     const paid = source?.payments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
     if (source && amount > Math.round((source.total - paid) * 100) / 100 + 0.005) return { error: "balance" as const };
     const selectedCustomer = source ? null : await resolveCustomer(tx, parsed.data);
@@ -370,8 +450,8 @@ export async function createReceipt(formData: FormData) {
         number: number.number,
         type: "RECEIPT",
         receiptStatus: "ISSUED",
-        subtotal: amount,
-        tax: 0,
+        subtotal,
+        tax,
         total: amount,
         currency,
         customerId,
@@ -380,7 +460,7 @@ export async function createReceipt(formData: FormData) {
         sourceDocumentId: source?.id ?? null,
         sequenceYear: year,
         sequenceValue: number.sequenceValue,
-        items: { create: { description: parsed.data.description, quantity: 1, unitPrice: amount, amount, taxRate: 0, taxAmount: 0, total: amount } },
+        items: { create: lineItems.map((row) => { const item = { ...row }; delete item.itemId; return item; }) },
         ...(source?.media.length ? { media: { create: source.media.map(({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder }) => ({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder })) } } : {}),
       },
       select: { id: true, number: true },
@@ -420,39 +500,14 @@ export async function updateReceiptDetails(formData: FormData) {
   const parsed = receiptEditSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/dashboard/documents/${String(formData.get("documentId") ?? "")}?receipt=invalid`);
 
-  const receiptItemIds = formData.getAll("receiptItemId").map(String);
-  const descriptions = formData.getAll("receiptDescription");
-  const quantities = formData.getAll("receiptQuantity");
-  const unitPrices = formData.getAll("receiptUnitPrice");
-  const discounts = formData.getAll("receiptDiscount");
-  const taxRates = formData.getAll("receiptTaxRate");
-  const receiptFields = [receiptItemIds, descriptions, quantities, unitPrices, discounts, taxRates];
-  if (!receiptItemIds.length || receiptItemIds.length > 100 || receiptFields.some((values) => values.length !== receiptItemIds.length)) {
+  const calculatedRows = parseLineItems(formData, "receipt");
+  if (!calculatedRows?.length) {
     redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
   }
-  const rows = receiptItemIds.map((itemId, index) => documentLineSchema.safeParse({
-    itemId: itemId || undefined,
-    description: String(descriptions[index] ?? "").trim(),
-    quantity: quantities[index],
-    unitPrice: unitPrices[index],
-    discount: discounts[index],
-    taxRate: taxRates[index],
-  }));
-  if (rows.some((row) => !row.success) || rows.some((row) => row.success && row.data.discount > row.data.quantity * row.data.unitPrice)) {
-    redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
-  }
-  const validRows = rows.filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => row.success);
-  let subtotal = 0;
-  let tax = 0;
-  const calculatedRows = validRows.map((row, index) => {
-    const amount = Math.round((row.data.quantity * row.data.unitPrice - row.data.discount) * 100) / 100;
-    const taxAmount = Math.round(amount * row.data.taxRate) / 100;
-    subtotal = Math.round((subtotal + amount) * 100) / 100;
-    tax = Math.round((tax + taxAmount) * 100) / 100;
-    return { ...row.data, amount, taxAmount, total: Math.round((amount + taxAmount) * 100) / 100, sortOrder: index };
-  });
+  const subtotal = Math.round(calculatedRows.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
+  const tax = Math.round(calculatedRows.reduce((sum, row) => sum + row.taxAmount, 0) * 100) / 100;
   const amount = Math.round((subtotal + tax) * 100) / 100;
-  if (amount <= 0 || amount !== Math.round(parsed.data.amount * 100) / 100) redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
+  if (amount <= 0) redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
 
   const result = await prisma.$transaction(async (tx) => {
     const receipt = await tx.document.findUnique({
@@ -463,7 +518,7 @@ export async function updateReceiptDetails(formData: FormData) {
 
     const existingItemIds = new Set(receipt.items.map((item) => item.id));
     const submittedItemIds = calculatedRows.filter((row) => row.itemId).map((row) => row.itemId as string);
-    if (new Set(submittedItemIds).size !== submittedItemIds.length || submittedItemIds.some((itemId) => !existingItemIds.has(itemId)) || receipt.items.some((item) => !submittedItemIds.includes(item.id))) return { error: "link" as const };
+    if (new Set(submittedItemIds).size !== submittedItemIds.length || submittedItemIds.some((itemId) => !existingItemIds.has(itemId))) return { error: "link" as const };
 
     const paidByOtherReceipts = receipt.sourceDocument?.payments
       .filter((payment) => payment.id !== receipt.payment!.id)
@@ -479,6 +534,8 @@ export async function updateReceiptDetails(formData: FormData) {
         await tx.documentItem.create({ data: { documentId: receipt.id, description: row.description, quantity: row.quantity, unitPrice: row.unitPrice, discount: row.discount, taxRate: row.taxRate, amount: row.amount, taxAmount: row.taxAmount, total: row.total, sortOrder: row.sortOrder } });
       }
     }
+    const removedItemIds = receipt.items.filter((item) => !submittedItemIds.includes(item.id)).map((item) => item.id);
+    if (removedItemIds.length) await tx.documentItem.deleteMany({ where: { id: { in: removedItemIds }, documentId: receipt.id } });
     await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount } });
     if (receipt.sourceDocument?.type === "INVOICE") {
       const invoiceStatus = revisedPaidTotal >= receipt.sourceDocument.total - 0.005 ? "PAID" : revisedPaidTotal > 0 ? "PARTIALLY_PAID" : "ISSUED";
@@ -514,7 +571,7 @@ export async function updateQuotationOrInvoice(formData: FormData) {
   const fields = [itemIds, descriptions, quantities, unitPrices, discounts, taxRates];
   if (!documentId || !customerSelection.success || !customerSelection.data.customerId || terms.length > 8000 || !itemIds.length || itemIds.length > 100 || fields.some((values) => values.length !== itemIds.length)) redirect(`${path}?edit=invalid`);
 
-  const rows = itemIds.map((itemId, index) => {
+  const parsedRows = itemIds.map((itemId, index) => {
     const description = String(descriptions[index] ?? "").trim();
     const quantity = String(quantities[index] ?? "").trim();
     const unitPrice = String(unitPrices[index] ?? "").trim();
@@ -523,7 +580,9 @@ export async function updateQuotationOrInvoice(formData: FormData) {
     const hasValue = description || quantity || unitPrice || discount || taxRate;
     if (!hasValue) return null;
     return documentLineSchema.safeParse({ itemId: itemId || undefined, description, quantity, unitPrice, discount, taxRate });
-  }).filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => row !== null && row.success);
+  });
+  if (parsedRows.some((row) => row !== null && !row.success)) redirect(`${path}?edit=invalid`);
+  const rows = parsedRows.filter((row): row is { success: true; data: z.infer<typeof documentLineSchema> } => row !== null && row.success);
 
   if (rows.length === 0 || rows.some((row) => row.data.discount > row.data.quantity * row.data.unitPrice)) redirect(`${path}?edit=invalid`);
   const existingItemIds = rows.filter((row) => row.data.itemId).map((row) => row.data.itemId as string);
@@ -543,13 +602,12 @@ export async function updateQuotationOrInvoice(formData: FormData) {
     for (const row of rows) {
       if (row.data.itemId && !existingDocumentItemIds.has(row.data.itemId)) return { status: "invalid" as const };
     }
-    if (document.items.some((item) => !rows.some((row) => row.data.itemId === item.id)) && rows.some((row) => row.data.itemId)) {
-      const missingItem = document.items.find((item) => !rows.some((row) => row.data.itemId === item.id));
-      if (missingItem) return { status: "invalid" as const };
-    }
-
     const selectedCustomer = await resolveCustomer(tx, customerSelection.data);
     if (!selectedCustomer) return { status: "invalid" as const };
+
+    const retainedIds = new Set(rows.map((row) => row.data.itemId).filter((itemId): itemId is string => Boolean(itemId)));
+    const removedIds = document.items.filter((item) => !retainedIds.has(item.id)).map((item) => item.id);
+    if (removedIds.length) await tx.documentItem.deleteMany({ where: { id: { in: removedIds }, documentId: document.id } });
 
     let subtotal = 0;
     let tax = 0;
@@ -577,13 +635,6 @@ export async function updateQuotationOrInvoice(formData: FormData) {
           },
         });
       }
-    }
-
-    const remainingItems = await tx.documentItem.findMany({ where: { documentId: document.id }, select: { id: true } });
-    const incomingIds = new Set(rows.filter((row) => row.data.itemId).map((row) => row.data.itemId as string));
-    const staleItems = remainingItems.filter((item) => !incomingIds.has(item.id));
-    if (staleItems.length > 0) {
-      await Promise.all(staleItems.map((item) => tx.documentItem.delete({ where: { id: item.id } })));
     }
 
     await tx.document.update({ where: { id: document.id }, data: { customerId: selectedCustomer.customer.id, terms, subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 } });

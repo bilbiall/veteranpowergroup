@@ -42,7 +42,8 @@ function addDocumentRow(tbody: HTMLTableSectionElement, item?: LineItem, fieldPr
 
   for (const field of fields) {
     const cell = window.document.createElement("td");
-    const input = createInput(`${fieldPrefix}${field.name}`, field.label, field.type, field.value, field.min, field.max);
+    const inputName = fieldPrefix ? `${fieldPrefix}${field.name[0].toUpperCase()}${field.name.slice(1)}` : field.name;
+    const input = createInput(inputName, field.label, field.type, field.value, field.min, field.max);
     if (field.name === "description") {
       input.minLength = 2;
       input.maxLength = 250;
@@ -58,7 +59,29 @@ function addDocumentRow(tbody: HTMLTableSectionElement, item?: LineItem, fieldPr
     }
     row.append(cell);
   }
+  appendRemoveControl(row, tbody);
   tbody.append(row);
+  refreshRemoveControls(tbody);
+}
+
+function refreshRemoveControls(tbody: HTMLTableSectionElement) {
+  for (const button of Array.from(tbody.querySelectorAll<HTMLButtonElement>(".line-item-remove"))) button.disabled = tbody.rows.length <= 1;
+}
+
+function appendRemoveControl(row: HTMLTableRowElement, tbody: HTMLTableSectionElement, afterRemove?: () => void) {
+  const cell = window.document.createElement("td");
+  const button = window.document.createElement("button");
+  button.type = "button";
+  button.className = "line-item-remove";
+  button.textContent = "Remove";
+  button.addEventListener("click", () => {
+    if (tbody.rows.length <= 1) return;
+    row.remove();
+    refreshRemoveControls(tbody);
+    afterRemove?.();
+  });
+  cell.append(button);
+  row.append(cell);
 }
 
 function appendAddButton(parent: Element, onAdd: () => void) {
@@ -84,13 +107,17 @@ export default function DocumentLineItemEnhancer({ documentId, documentType, ite
       const existingRows = Array.from(tbody.rows);
       existingRows.forEach((row, index) => {
         const lastCell = row.cells.item(row.cells.length - 1);
-        if (!lastCell || lastCell.querySelector('input[name="itemId"]')) return;
-        const itemId = window.document.createElement("input");
-        itemId.type = "hidden";
-        itemId.name = "itemId";
-        itemId.value = items[index]?.id ?? "";
-        lastCell.append(itemId);
+        if (!lastCell) return;
+        if (!row.querySelector('input[name="itemId"]')) {
+          const itemId = window.document.createElement("input");
+          itemId.type = "hidden";
+          itemId.name = "itemId";
+          itemId.value = items[index]?.id ?? "";
+          lastCell.append(itemId);
+        }
+        if (!row.querySelector(".line-item-remove")) appendRemoveControl(row, tbody);
       });
+      refreshRemoveControls(tbody);
 
       const buttonHost = window.document.createElement("div");
       tableScroll.insertAdjacentElement("afterend", buttonHost);
@@ -117,7 +144,7 @@ export default function DocumentLineItemEnhancer({ documentId, documentType, ite
     table.className = "document-edit-table";
     const header = window.document.createElement("thead");
     const headerRow = window.document.createElement("tr");
-    for (const title of ["Description", "Quantity", `Unit price (${amountInput.closest("label")?.textContent?.match(/\(([^)]+)\)/)?.[1] ?? "currency"})`, "Discount", "Tax rate (%)"]) {
+    for (const title of ["Description", "Quantity", `Unit price (${amountInput.closest("label")?.textContent?.match(/\(([^)]+)\)/)?.[1] ?? "currency"})`, "Discount", "Tax rate (%)", "Action"]) {
       const cell = window.document.createElement("th");
       cell.textContent = title;
       headerRow.append(cell);
@@ -143,6 +170,9 @@ export default function DocumentLineItemEnhancer({ documentId, documentType, ite
       amountInput.value = (Math.round(total * 100) / 100).toFixed(2);
     };
     tbody.addEventListener("input", updateTotal);
+    tbody.addEventListener("click", (event) => {
+      if ((event.target as Element).closest(".line-item-remove")) updateTotal();
+    });
     appendAddButton(buttonHost, () => {
       addDocumentRow(tbody, undefined, "receipt", "receiptItemId");
       updateTotal();

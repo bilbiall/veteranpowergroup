@@ -142,6 +142,15 @@ td { color: var(--ink); }
 .prototype-form input, .prototype-form select { background: #fbfcfa; border: 1px solid var(--line); border-radius: 0; color: var(--ink); font: inherit; font-size: 13px; min-height: 42px; padding: 9px 11px; width: 100%; }
 .prototype-form input:focus, .prototype-form select:focus { border-color: var(--forest); outline: 2px solid #d7f36a; }
 .prototype-form .dashboard-button { align-self: end; justify-self: start; min-height: 42px; }
+.line-item-full-width { grid-column: 1 / -1; min-width: 0; }
+.line-item-editor { display: grid; gap: 12px; min-width: 0; }
+.line-item-editor .dashboard-button { margin: 0; min-height: 42px; justify-self: start; }
+.line-item-editor .document-edit-table { width: 100%; }
+.line-item-editor .document-edit-table input { min-width: 72px; }
+.line-item-editor .document-edit-table td:first-child input { min-width: 180px; }
+.line-item-remove { background: transparent; border: 1px solid var(--line); color: var(--muted); cursor: pointer; font: inherit; font-size: 11px; padding: 7px 9px; }
+.line-item-remove:disabled { cursor: not-allowed; opacity: .45; }
+.line-item-total { color: var(--muted); font-size: 12px; margin: 0; text-align: right; }
 .settings-panel { margin-bottom: 14px; }
 .staff-management { margin-top: 14px; }
 .staff-create-form { align-items: end; border-bottom: 1px solid var(--line); padding-bottom: 22px; }
