@@ -333,6 +333,14 @@ td { color: var(--ink); }
 .related-document-list { list-style: none; margin: 0; padding: 0; }
 .related-document-list li { align-items: center; }
 .document-action-panel .dashboard-button { min-height: 40px; }
+.document-delete-panel { align-items: center; display: flex; gap: 22px; justify-content: space-between; margin-top: 14px; padding: 22px 25px; }
+.document-delete-panel .eyebrow { margin-bottom: 7px; }
+.document-delete-panel h2 { font-size: 22px; font-weight: 500; }
+.danger-button { background: #a84532; border: 1px solid #a84532; color: #fff; cursor: pointer; font: inherit; font-size: 12px; min-height: 40px; padding: 0 18px; }
+.danger-button:hover { background: #853a2b; }
+.danger-button:disabled { cursor: not-allowed; opacity: .55; }
+form[aria-busy="true"] button[type="submit"] { cursor: wait; opacity: .72; }
+@media (max-width: 760px) { .document-delete-panel { align-items: stretch; flex-direction: column; } .document-delete-panel form, .document-delete-panel .danger-button { width: 100%; } }
 .document-edit-form { display: grid; gap: 14px; }
 .document-edit-form > label { color: var(--muted); display: grid; font-size: 11px; font-weight: 600; gap: 6px; max-width: 520px; }
 .document-edit-form input, .document-edit-form select { background: #fbfcfa; border: 1px solid var(--line); border-radius: 2px; color: var(--ink); font: inherit; font-size: 12px; min-height: 39px; padding: 8px; width: 100%; }

@@ -25,7 +25,7 @@ export default async function SchoolPaymentPlansPage({ searchParams }: PageProps
           <p className="school-plan-total">{kes(plan.total)} <span>indicative, ex-VAT</span></p>
           <ol className="school-plan-stages">{plan.stages.map((stage, index) => <li key={stage.label}><span><b>Stage {index + 1} · {stage.percent}%</b><small>{stage.label}</small></span><strong>{kes(amounts[index])}</strong></li>)}</ol>
           <p className="table-subtext">Price basis: <a className="inline-link" href={plan.sourceUrl} target="_blank" rel="noreferrer">{plan.sourceLabel}</a></p>
-          <form action={createSchoolPlanQuotation} className="school-plan-form">
+          <form action={createSchoolPlanQuotation} className="school-plan-form" data-single-submit>
             <input type="hidden" name="planId" value={plan.id} />
             <p className="school-template-label">Fill in the institution and payment schedule</p>
             <label>Customer / institution name<input name="customerName" list={`customer-suggestions-${plan.id}`} autoComplete="organization" required minLength={2} maxLength={160} placeholder="Start typing an existing customer or enter a new name" /><datalist id={`customer-suggestions-${plan.id}`}>{suggestions.map((name) => <option key={name} value={name} />)}</datalist><small>Existing customer names will be suggested; you can type a new one.</small></label>

@@ -42,6 +42,11 @@ function documentTerms(document: ExportDocument) {
   return document.terms ?? document.company.documents?.terms ?? "";
 }
 
+function documentDateSummary(document: ExportDocument) {
+  const status = document.type === "QUOTATION" ? "" : `Status: ${documentStatus(document)}    `;
+  return `${status}Currency: ${document.currency}    Date: ${document.createdAt.toLocaleDateString("en")}`;
+}
+
 function relatedDocumentLines(document: ExportDocument) {
   const lines: string[] = [];
   if (document.sourceDocument) lines.push(`${document.type === "INVOICE" ? "Quotation number" : "Invoice number"}: ${document.sourceDocument.number}`);
@@ -89,10 +94,10 @@ async function createWordDocument(document: ExportDocument) {
     ...(companyContact.length ? [new Paragraph(companyContact.join(" · "))] : []),
     ...(company?.taxInformation ? [new Paragraph(`Tax information: ${company.taxInformation}`)] : []),
     new Paragraph({ text: documentTitle(document), heading: HeadingLevel.TITLE, spacing: { before: 280, after: 100 } }),
-    new Paragraph({ children: [new TextRun({ text: `Status: ${documentStatus(document)}`, bold: true }), new TextRun(`    Currency: ${document.currency}    Date: ${document.createdAt.toLocaleDateString("en")}`)] }),
+    new Paragraph({ text: documentDateSummary(document) }),
     new Paragraph({ text: "Bill to", heading: HeadingLevel.HEADING_3, spacing: { before: 240, after: 80 } }),
-    new Paragraph({ children: [new TextRun({ text: document.customer.company || document.customer.name, bold: true })] }),
-    ...(document.customer.company && document.customer.name ? [new Paragraph(document.customer.name)] : []),
+    new Paragraph({ children: [new TextRun({ text: document.customer.name, bold: true })] }),
+    ...(document.customer.company ? [new Paragraph(document.customer.company)] : []),
     ...([document.customer.address, document.customer.email, document.customer.phone].filter(Boolean).map((value) => new Paragraph(value!))),
     ...relatedDocumentLines(document).map((line) => new Paragraph(line)),
     new Paragraph({ text: "Items", heading: HeadingLevel.HEADING_3, spacing: { before: 260, after: 100 } }),
@@ -160,9 +165,12 @@ async function createSpreadsheet(document: ExportDocument) {
   sheet.getCell("A2").value = documentTitle(document);
   sheet.getCell("A2").font = { bold: true, size: 14 };
   if (schoolLogoId !== null) sheet.addImage(schoolLogoId, "F1:G2");
-  sheet.addRow(["Status", documentStatus(document), "Date", document.createdAt, "Currency", document.currency]);
-  sheet.addRow(["Customer", document.customer.company || document.customer.name, "Email", document.customer.email ?? ""]);
-  sheet.addRow(["Phone", document.customer.phone ?? "", "Address", document.customer.address ?? ""]);
+  sheet.addRow(document.type === "QUOTATION"
+    ? ["Date", document.createdAt, "Currency", document.currency]
+    : ["Status", documentStatus(document), "Date", document.createdAt, "Currency", document.currency]);
+  sheet.addRow(["Customer", document.customer.name, "Company", document.customer.company ?? ""]);
+  sheet.addRow(["Email", document.customer.email ?? "", "Phone", document.customer.phone ?? ""]);
+  sheet.addRow(["Address", document.customer.address ?? ""]);
   if (document.company.profile?.taxInformation) sheet.addRow(["Company tax information", document.company.profile.taxInformation]);
   relatedDocumentLines(document).forEach((line) => sheet.addRow(["Related document", line]));
   sheet.addRow([]);
@@ -228,10 +236,10 @@ async function createPdf(document: ExportDocument) {
     if (document.company.profile?.taxInformation) pdf.text(`Tax information: ${document.company.profile.taxInformation}`);
     if (schoolLogo) pdf.image(Buffer.from(logoBytes(schoolLogo.url)), 408, 42, { fit: [138, 72], align: "center", valign: "center" });
     pdf.moveDown(1.6).fillColor("#202a27").font("Helvetica-Bold").fontSize(24).text(documentTitle(document));
-    pdf.moveDown(0.5).font("Helvetica").fontSize(10).fillColor("#68716c").text(`Status: ${documentStatus(document)}     Currency: ${document.currency}     Date: ${document.createdAt.toLocaleDateString("en")}`);
+    pdf.moveDown(0.5).font("Helvetica").fontSize(10).fillColor("#68716c").text(documentDateSummary(document));
     pdf.moveDown(1.4).fillColor("#202a27").font("Helvetica-Bold").fontSize(11).text("Bill to");
-    pdf.font("Helvetica").fontSize(10).text(document.customer.company || document.customer.name);
-    if (document.customer.company && document.customer.name) pdf.text(document.customer.name);
+    pdf.font("Helvetica-Bold").fontSize(10).text(document.customer.name);
+    if (document.customer.company) pdf.font("Helvetica").text(document.customer.company);
     for (const detail of [document.customer.address, document.customer.email, document.customer.phone]) if (detail) pdf.text(detail);
     relatedDocumentLines(document).forEach((line) => pdf.text(line));
     pdf.moveDown(1.2);

@@ -140,7 +140,16 @@ export async function getStaffAccess(userId: string): Promise<StaffAccess> {
     select: { sectionAccess: true, roles: { select: { role: { select: { name: true } } } } },
   });
   const isAdmin = Boolean(user?.roles.some(({ role }) => role.name === adminRoleName));
-  return { isAdmin, sections: isAdmin ? [...staffAccessKeys] : (user?.sectionAccess ?? []).filter(isStaffAccessKey) };
+  const sections = isAdmin ? [...staffAccessKeys] : (user?.sectionAccess ?? []).filter(isStaffAccessKey);
+  if (sections.includes("manage-staff") && !sections.includes("settings")) sections.push("settings");
+  return { isAdmin, sections };
+}
+
+export async function requireStaffManagementSession() {
+  const session = await requirePrototypeSession();
+  const access = await getStaffAccess(session.userId);
+  if (!access.isAdmin && !access.sections.includes("manage-staff")) redirectToAllowedSection(access);
+  return session;
 }
 
 export function redirectToAllowedSection(access: StaffAccess): never {

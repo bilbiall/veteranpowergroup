@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSession, requireSectionAccess } from "@/lib/prototype-auth";
+import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSession, requireSectionAccess, requireStaffManagementSession } from "@/lib/prototype-auth";
 import { getSchoolPaymentPlan } from "@/lib/school-payment-plans";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 import { isPortfolioMediaType } from "@/lib/portfolio-media";
@@ -240,7 +240,7 @@ export async function createQuotation(formData: FormData) {
 
     const document = await tx.document.create({
       data: {
-        number, type: "QUOTATION", quotationStatus: "DRAFT", subtotal, tax, total,
+        number, type: "QUOTATION", quotationStatus: "SENT", subtotal, tax, total,
         currency: "KES", terms: parsed.data.terms || null,
         customerId: customer.customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue,
         items: { create: rows.map((row) => { const item = { ...row }; delete item.itemId; return item; }) },
@@ -255,7 +255,7 @@ export async function createQuotation(formData: FormData) {
     await prisma.auditLog.create({ data: { actorId: owner.id, action: "created", entityType: "Customer", entityId: result.customer.id, summary: `Created customer ${result.customer.name} from a quotation` } });
   }
   await prisma.auditLog.create({
-    data: { actorId: owner.id, action: "created", entityType: "Quotation", entityId: result.id, summary: `Created draft quotation ${result.number}` },
+    data: { actorId: owner.id, action: "created", entityType: "Quotation", entityId: result.id, summary: `Created quotation ${result.number}` },
   });
   redirect("/dashboard/quotations?created=1");
 }
@@ -342,7 +342,7 @@ export async function createSchoolPlanQuotation(formData: FormData) {
     });
     const tax = items.reduce((sum, item) => sum + item.taxAmount, 0);
     const number = await nextDocumentNumber(tx, "QUOTATION", year);
-    return tx.document.create({ data: { number: number.number, type: "QUOTATION", quotationStatus: "DRAFT", subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100, currency: parsed.data.currency, customerId: customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue: number.sequenceValue, items: { create: items } }, select: { id: true, number: true } });
+    return tx.document.create({ data: { number: number.number, type: "QUOTATION", quotationStatus: "SENT", subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100, currency: parsed.data.currency, customerId: customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue: number.sequenceValue, items: { create: items } }, select: { id: true, number: true } });
   });
   await prisma.auditLog.create({ data: { actorId: owner.id, action: "created", entityType: "Quotation", entityId: result.id, summary: `Created indicative ${plan.category} school payment plan quotation ${result.number}` } });
   redirect(`/dashboard/documents/${result.id}`);
@@ -651,8 +651,54 @@ export async function updateQuotationOrInvoice(formData: FormData) {
   redirect(`${path}?edit=updated`);
 }
 
+export async function deleteDocumentRecord(formData: FormData) {
+  const documentId = String(formData.get("documentId") ?? "");
+  if (!documentId) redirect("/dashboard/quotations?delete=missing");
+  const initial = await prisma.document.findUnique({ where: { id: documentId }, select: { type: true } });
+  const requiredSection = initial ? documentSection(initial.type) : null;
+  if (!requiredSection) redirect("/dashboard/quotations?delete=missing");
+  const actor = await requireSectionAccess(requiredSection);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const document = await tx.document.findUnique({
+      where: { id: documentId },
+      include: {
+        payment: true,
+        payments: { select: { id: true, amount: true } },
+        derivedDocuments: { select: { id: true } },
+        etims: { select: { id: true } },
+      },
+    });
+    if (!document) return { error: "missing" as const };
+    if (document.etims.length) return { error: "tax-record" as const };
+    if (document.type !== "RECEIPT" && (document.payments.length || document.derivedDocuments.length)) return { error: "linked" as const };
+
+    if (document.payment) {
+      const sourceId = document.payment.documentId;
+      await tx.payment.delete({ where: { id: document.payment.id } });
+      if (sourceId) {
+        const source = await tx.document.findUnique({ where: { id: sourceId }, include: { payments: { select: { amount: true } } } });
+        if (source?.type === "INVOICE") {
+          const paid = source.payments.reduce((sum, payment) => sum + payment.amount, 0);
+          const invoiceStatus = paid >= source.total - 0.005 ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : "ISSUED";
+          await tx.document.update({ where: { id: source.id }, data: { invoiceStatus } });
+        }
+      }
+    }
+    await tx.document.delete({ where: { id: document.id } });
+    return { error: null as null, id: document.id, number: document.number, type: document.type };
+  });
+
+  if (result.error) redirect(`/dashboard/documents/${encodeURIComponent(documentId)}?delete=${result.error}`);
+  await prisma.auditLog.create({ data: { actorId: actor.userId, action: "deleted", entityType: result.type, entityId: result.id, summary: `Deleted ${result.type.toLowerCase()} ${result.number}` } });
+  revalidatePath("/dashboard/quotations");
+  revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard/receipts");
+  redirect(`/dashboard/${result.type.toLowerCase()}s?deleted=1`);
+}
+
 export async function createStaffAccount(formData: FormData) {
-  const actor = await requirePrototypeAdminSession();
+  const actor = await requireStaffManagementSession();
   const parsed = staffAccountSchema.safeParse(Object.fromEntries(formData));
   const sections = parseStaffSections(formData);
   if (!parsed.success || !sections) redirect("/dashboard/settings?staff=invalid");
@@ -692,7 +738,7 @@ export async function createStaffAccount(formData: FormData) {
 }
 
 export async function setStaffStatus(formData: FormData) {
-  const actor = await requirePrototypeAdminSession();
+  const actor = await requireStaffManagementSession();
   const parsed = staffStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success || parsed.data.userId === actor.userId) redirect("/dashboard/settings?staff=invalid");
 
@@ -710,10 +756,10 @@ export async function setStaffStatus(formData: FormData) {
 }
 
 export async function updateStaffSections(formData: FormData) {
-  const actor = await requirePrototypeAdminSession();
+  const actor = await requireStaffManagementSession();
   const userId = String(formData.get("userId") ?? "");
   const sections = parseStaffSections(formData);
-  if (!userId || !sections) redirect("/dashboard/settings?staff=invalid");
+  if (!userId || userId === actor.userId || !sections) redirect("/dashboard/settings?staff=invalid");
 
   const staff = await prisma.user.findUnique({
     where: { id: userId },
@@ -729,7 +775,7 @@ export async function updateStaffSections(formData: FormData) {
 }
 
 export async function resetStaffPassword(formData: FormData) {
-  const actor = await requirePrototypeAdminSession();
+  const actor = await requireStaffManagementSession();
   const parsed = staffPasswordSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success || parsed.data.userId === actor.userId) redirect("/dashboard/settings?staff=invalid");
 

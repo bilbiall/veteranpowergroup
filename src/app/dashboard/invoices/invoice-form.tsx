@@ -5,7 +5,7 @@ import CustomerSelect, { type CustomerOption } from "@/components/customer-selec
 import LineItemEditor from "@/components/line-item-editor";
 
 export default function InvoiceForm({ customers, defaultTaxRate }: { customers: CustomerOption[]; defaultTaxRate: number }) {
-  return <form action={createStandaloneInvoice} className="prototype-form">
+  return <form action={createStandaloneInvoice} className="prototype-form" data-single-submit>
     <CustomerSelect customers={customers} />
     <label className="line-item-full-width">Terms<textarea name="terms" maxLength={8000} rows={4} placeholder="Enter payment, delivery, or validity terms" /></label>
     <div className="line-item-full-width"><LineItemEditor currency="KES" defaultTaxRate={defaultTaxRate} /></div>

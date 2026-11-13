@@ -15,6 +15,7 @@ export const staffSections = [
 
 export const staffPermissions = [
   { key: "company-profile", label: "Edit company profile", group: "Manage" },
+  { key: "manage-staff", label: "Create and manage staff accounts", group: "Manage" },
 ] as const;
 
 export type StaffSectionKey = (typeof staffSections)[number]["key"];

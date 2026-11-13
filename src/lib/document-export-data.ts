@@ -12,6 +12,7 @@ export const exportDocumentInclude = {
   payment: true,
   payments: { include: { receipt: { select: { id: true, number: true, receiptStatus: true } } }, orderBy: { paidAt: "asc" } },
   derivedDocuments: { select: { id: true, number: true, type: true, invoiceStatus: true, receiptStatus: true, total: true, createdAt: true }, orderBy: { createdAt: "asc" } },
+  etims: { select: { id: true } },
   media: { select: { id: true, filename: true, url: true, mimeType: true, altText: true, title: true } },
 } satisfies Prisma.DocumentInclude;
 
