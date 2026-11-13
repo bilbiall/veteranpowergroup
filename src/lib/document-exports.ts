@@ -76,7 +76,7 @@ function logoBytes(url: string) {
 function companyLogoBytes(document: ExportDocument) {
   const logo = companyLogo(document);
   try {
-    return logoBytes(logo.url);
+    return Buffer.from(logoBytes(logo.url));
   } catch {
     return readFileSync(path.join(process.cwd(), "public", "veteran-power-solutions-logo.jpeg"));
   }
@@ -102,7 +102,7 @@ async function createWordDocument(document: ExportDocument) {
     ] })),
   ];
   const section = [
-    new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: logo.mimeType === "image/png" ? "png" : "jpg", data: companyLogoBytes(document).buffer as ArrayBuffer, transformation: { width: 190, height: 68 } })] }),
+    new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: logo.mimeType === "image/png" ? "png" : "jpg", data: Uint8Array.from(companyLogoBytes(document)).buffer as ArrayBuffer, transformation: { width: 190, height: 68 } })] }),
     new Paragraph({ text: company?.name ?? "Company details to be confirmed", heading: HeadingLevel.HEADING_2 }),
     ...(company?.address ? [new Paragraph(company.address)] : []),
     ...(companyContact.length ? [new Paragraph(companyContact.join(" · "))] : []),
