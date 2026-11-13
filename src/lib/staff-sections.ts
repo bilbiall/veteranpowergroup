@@ -15,7 +15,7 @@ export const staffSections = [
 
 export const staffPermissions = [
   { key: "company-profile", label: "Edit company profile", group: "Manage" },
-  { key: "manage-staff", label: "Create and manage staff accounts", group: "Manage" },
+  { key: "manage-staff", label: "Staff accounts", group: "Access" },
 ] as const;
 
 export type StaffSectionKey = (typeof staffSections)[number]["key"];
@@ -31,7 +31,7 @@ export const staffSectionGroups = [...new Set(staffSections.map((section) => sec
   sections: staffSections.filter((section) => section.group === group),
 }));
 
-export const staffAccessGroups = staffSectionGroups.map(({ group }) => ({
+export const staffAccessGroups = [...new Set(staffAccessOptions.map((option) => option.group))].map((group) => ({
   group,
   options: staffAccessOptions.filter((option) => option.group === group),
 }));
