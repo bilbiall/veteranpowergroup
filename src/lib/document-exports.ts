@@ -28,6 +28,7 @@ import {
   type ExportDocument,
   formatDocumentNumber,
 } from "@/lib/document-export-data";
+import { companyKraPin, visibleDocumentPaymentDetails } from "@/lib/document-payment-details";
 
 export type ExportFormat = "docx" | "xlsx" | "pdf";
 
@@ -130,6 +131,8 @@ async function createWordDocument(document: ExportDocument) {
     new Paragraph({ text: `Subtotal: ${formatDocumentCurrency(document.subtotal, document.currency)}`, alignment: AlignmentType.RIGHT, spacing: { before: 200 } }),
     new Paragraph({ text: `Tax: ${formatDocumentCurrency(document.tax, document.currency)}`, alignment: AlignmentType.RIGHT }),
     new Paragraph({ children: [new TextRun({ text: `Total: ${formatDocumentCurrency(document.total, document.currency)}`, bold: true, size: 26 })], alignment: AlignmentType.RIGHT, spacing: { before: 80, after: 160 } }),
+    ...(visibleDocumentPaymentDetails.length ? [new Paragraph({ text: "Payment details", heading: HeadingLevel.HEADING_3, spacing: { before: 120, after: 60 } }), ...visibleDocumentPaymentDetails.map((detail) => new Paragraph(`${detail.label}: ${detail.value}`))] : []),
+    ...(document.type === "RECEIPT" && companyKraPin ? [new Paragraph(`KRA PIN: ${companyKraPin}`)] : []),
     ...(document.payment ? [new Paragraph(`Payment: ${formatDocumentCurrency(document.payment.amount, document.currency)} via ${document.payment.method.replaceAll("_", " ")} on ${document.payment.paidAt.toLocaleDateString("en")}`)] : []),
     ...(documentTerms(document) ? [new Paragraph({ text: "Terms", heading: HeadingLevel.HEADING_3, spacing: { before: 280 } }), new Paragraph(documentTerms(document))] : []),
     ...(document.company.documents?.footer ? [new Paragraph({ text: document.company.documents.footer, spacing: { before: 300 } })] : []),
@@ -206,6 +209,13 @@ async function createSpreadsheet(document: ExportDocument) {
   sheet.addRow([`Subtotal (${document.currency})`, document.subtotal]);
   sheet.addRow([`Tax (${document.currency})`, document.tax]);
   sheet.addRow([`Total (${document.currency})`, document.total]);
+  sheet.addRow([]);
+  if (visibleDocumentPaymentDetails.length) {
+    const paymentHeader = sheet.addRow(["Payment details"]);
+    paymentHeader.font = { bold: true };
+    visibleDocumentPaymentDetails.forEach((detail) => sheet.addRow([detail.label, detail.value]));
+  }
+  if (document.type === "RECEIPT" && companyKraPin) sheet.addRow(["KRA PIN", companyKraPin]);
   if (documentTerms(document)) {
     sheet.addRow([]);
     sheet.addRow(["Terms", documentTerms(document)]);
@@ -292,7 +302,6 @@ async function createPdf(document: ExportDocument) {
         drawHeader();
       }
       const y = pdf.y;
-      if (index % 2 === 1) pdf.save().fillColor("#f7f9f7").rect(left, y, tableWidth, rowHeight).fill().restore();
       pdf.font("Helvetica").fontSize(9).fillColor("#202a27");
       const values = [
         item.description,
@@ -307,12 +316,20 @@ async function createPdf(document: ExportDocument) {
       pdf.y = y + rowHeight;
     }
 
-    ensureSpace(95);
+    ensureSpace(145);
     pdf.moveDown(0.5).font("Helvetica").fontSize(10).fillColor("#68716c");
-    pdf.text(`Subtotal (${document.currency}): ${formatDocumentNumber(document.subtotal)}`, left, pdf.y, { width: right - left, align: "right" });
-    pdf.text(`Tax (${document.currency}): ${formatDocumentNumber(document.tax)}`, left, pdf.y + 16, { width: right - left, align: "right" });
-    pdf.font("Helvetica-Bold").fontSize(14).fillColor("#202a27").text(`Total (${document.currency}): ${formatDocumentNumber(document.total)}`, left, pdf.y + 34, { width: right - left, align: "right" });
-    pdf.moveDown(4);
+    const totalsTop = pdf.y;
+    pdf.text(`Subtotal (${document.currency}): ${formatDocumentNumber(document.subtotal)}`, left, totalsTop, { width: right - left, align: "right" });
+    pdf.text(`Tax (${document.currency}): ${formatDocumentNumber(document.tax)}`, left, totalsTop + 16, { width: right - left, align: "right" });
+    pdf.font("Helvetica-Bold").fontSize(14).fillColor("#202a27").text(`Total (${document.currency}): ${formatDocumentNumber(document.total)}`, left, totalsTop + 34, { width: right - left, align: "right" });
+    pdf.y = totalsTop + 62;
+    if (visibleDocumentPaymentDetails.length) {
+      pdf.font("Helvetica-Bold").fontSize(10).fillColor("#24433a").text("Payment details", left);
+      pdf.font("Helvetica").fontSize(9).fillColor("#68716c");
+      for (const detail of visibleDocumentPaymentDetails) pdf.text(`${detail.label}: ${detail.value}`, left);
+    }
+    if (document.type === "RECEIPT" && companyKraPin) pdf.font("Helvetica").fontSize(9).fillColor("#68716c").text(`KRA PIN: ${companyKraPin}`, left);
+    pdf.moveDown(0.8);
     if (document.payment) pdf.font("Helvetica").fontSize(9).fillColor("#68716c").text(`Payment: ${formatDocumentCurrency(document.payment.amount, document.currency)} via ${document.payment.method.replaceAll("_", " ")} on ${document.payment.paidAt.toLocaleDateString("en")}`);
     if (documentTerms(document)) pdf.moveDown().font("Helvetica-Bold").text("Terms").font("Helvetica").text(documentTerms(document));
     if (document.company.documents?.footer) pdf.moveDown().text(document.company.documents.footer);

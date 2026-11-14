@@ -137,6 +137,10 @@ td { color: var(--ink); }
 .document-totals dd { font-size: 11px; margin: 0; }
 .document-totals .document-total { border-top: 1px solid var(--line); margin-top: 7px; padding-top: 13px; }
 .document-totals .document-total dt, .document-totals .document-total dd { color: var(--ink); font-size: 15px; font-weight: 700; }
+.preview-payment-details { margin: 24px 0 0; max-width: 340px; }
+.preview-payment-details h2 { color: var(--ink); font-family: var(--font-space-grotesk); font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.preview-payment-details p { color: var(--muted); font-size: 10px; line-height: 1.5; margin: 3px 0; }
+.preview-payment-details span { color: var(--ink); font-weight: 600; }
 .preview-terms { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
 .preview-terms h2 { font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 500; }
 .preview-terms p, .preview-disclaimer { color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -515,6 +519,9 @@ form[aria-busy="true"] button[type="submit"] { cursor: wait; opacity: .72; }
 :root[data-theme="dark"] .priority-low { background: #263a2d; color: #d6f0d8; }
 :root[data-theme="dark"] .table-scroll table tr { background: #202823; color: var(--foreground); }
 :root[data-theme="dark"] .table-scroll th { background: #26382e; color: var(--foreground); }
+:root[data-theme="dark"] .document-preview .table-scroll tr,
+:root[data-theme="dark"] .document-preview .table-scroll th,
+:root[data-theme="dark"] .document-preview .table-scroll td { background-color: transparent; }
 :root[data-theme="dark"] .table-scroll td,
 :root[data-theme="dark"] .table-scroll th { border-color: var(--line); }
 :root[data-theme="dark"] .document-preview { background: #202823; color: var(--foreground); }
