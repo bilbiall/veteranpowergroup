@@ -329,7 +329,7 @@ export async function createQuotation(formData: FormData) {
   await prisma.auditLog.create({
     data: { actorId: owner.id, action: "created", entityType: "Quotation", entityId: result.id, summary: `Created quotation ${result.number}` },
   });
-  redirect("/dashboard/quotations?created=1");
+  redirect(`/dashboard/documents/${result.id}`);
 }
 
 export async function createStandaloneInvoice(formData: FormData) {
@@ -420,7 +420,7 @@ export async function createSchoolPlanQuotation(formData: FormData) {
   redirect(`/dashboard/documents/${result.id}`);
 }
 
-export async function createInstallmentInvoices(formData: FormData) {
+export async function createInvoiceFromQuotation(formData: FormData) {
   const session = await requireSectionAccess("invoices");
   const parsed = documentIdSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/quotations?error=invalid");
@@ -431,20 +431,35 @@ export async function createInstallmentInvoices(formData: FormData) {
     if (quote.payments.length) return { error: "payments" as const };
     const existing = await tx.document.count({ where: { sourceDocumentId: quote.id, type: "INVOICE" } });
     if (existing) return { error: "exists" as const };
-    const invoices = [];
-    for (const item of quote.items) {
-      const year = new Date().getFullYear();
-      const number = await nextDocumentNumber(tx, "INVOICE", year);
-      const invoice = await tx.document.create({ data: { number: number.number, type: "INVOICE", invoiceStatus: "DRAFT", subtotal: item.amount, tax: item.taxAmount, total: item.total, currency: quote.currency, customerId: quote.customerId, ownerId: actor?.id ?? quote.ownerId, companyId: quote.companyId, sourceDocumentId: quote.id, sequenceYear: year, sequenceValue: number.sequenceValue, items: { create: { description: item.description, quantity: item.quantity, unitPrice: item.unitPrice, discount: item.discount, taxRate: item.taxRate, amount: item.amount, taxAmount: item.taxAmount, total: item.total, sortOrder: item.sortOrder } }, ...(quote.media.length ? { media: { create: quote.media.map(({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder }) => ({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder })) } } : {}) }, select: { id: true, number: true } });
-      invoices.push(invoice);
-    }
-    return { error: null as null, invoices, quoteNumber: quote.number };
+    const year = new Date().getFullYear();
+    const number = await nextDocumentNumber(tx, "INVOICE", year);
+    const invoice = await tx.document.create({ data: {
+      number: number.number,
+      type: "INVOICE",
+      invoiceStatus: "DRAFT",
+      subtotal: quote.subtotal,
+      tax: quote.tax,
+      total: quote.total,
+      terms: quote.terms,
+      currency: quote.currency,
+      customerId: quote.customerId,
+      ownerId: actor?.id ?? quote.ownerId,
+      companyId: quote.companyId,
+      sourceDocumentId: quote.id,
+      sequenceYear: year,
+      sequenceValue: number.sequenceValue,
+      items: { create: quote.items.map(({ description, quantity, unitPrice, discount, taxRate, amount, taxAmount, total, sortOrder }) => ({ description, quantity, unitPrice, discount, taxRate, amount, taxAmount, total, sortOrder })) },
+      ...(quote.media.length ? { media: { create: quote.media.map(({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder }) => ({ filename, url, mimeType, size, title, description, altText, width, height, duration, caption, sortOrder })) } } : {}),
+    }, select: { id: true, number: true } });
+    return { error: null as null, invoice, quoteNumber: quote.number };
   });
   if (result.error === "invalid") redirect("/dashboard/quotations?error=invalid");
-  if (result.error === "exists") redirect(`/dashboard/documents/${parsed.data.documentId}?invoices=exists`);
-  if (result.error === "payments") redirect(`/dashboard/documents/${parsed.data.documentId}?invoices=payments`);
-  if (actor && result.error === null) await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Invoice", entityId: parsed.data.documentId, summary: `Created ${result.invoices.length} installment invoices linked to quotation ${result.quoteNumber}` } });
-  redirect(`/dashboard/documents/${parsed.data.documentId}?invoices=created`);
+  if (result.error === "exists") redirect(`/dashboard/documents/${parsed.data.documentId}?invoice=exists`);
+  if (result.error === "payments") redirect(`/dashboard/documents/${parsed.data.documentId}?invoice=payments`);
+  if (actor && result.error === null) await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Invoice", entityId: result.invoice.id, summary: `Created invoice ${result.invoice.number} linked to quotation ${result.quoteNumber}` } });
+  revalidatePath("/dashboard/quotations");
+  revalidatePath("/dashboard/invoices");
+  redirect(`/dashboard/documents/${result.invoice.id}?invoice=created`);
 }
 
 export async function issueInvoice(formData: FormData) {
@@ -504,9 +519,9 @@ export async function createReceipt(formData: FormData) {
       })
       : null;
     if (parsed.data.sourceDocumentId && !source) return { error: "source" as const };
-    if (source && source.type !== "INVOICE" && source.type !== "QUOTATION") return { error: "source" as const };
+    if (source && source.type !== "INVOICE") return { error: "source" as const };
     if (source?.type === "INVOICE" && !["ISSUED", "PARTIALLY_PAID"].includes(source.invoiceStatus ?? "")) return { error: "state" as const };
-    if (source?.type === "QUOTATION" && source.derivedDocuments.length > 0) return { error: "invoiced" as const };
+    if (source?.type === "QUOTATION") return { error: "source" as const };
 
     const paid = source?.payments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
     if (source && amount > Math.round((source.total - paid) * 100) / 100 + 0.005) return { error: "balance" as const };
@@ -556,7 +571,6 @@ export async function createReceipt(formData: FormData) {
 
   if (result.error === "source") redirect("/dashboard/receipts?error=source");
   if (result.error === "state") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=invoice-state`);
-  if (result.error === "invoiced") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=quotation-invoiced`);
   if (result.error === "balance") redirect(`/dashboard/receipts?sourceDocumentId=${encodeURIComponent(parsed.data.sourceDocumentId ?? "")}&error=balance`);
   if (result.error === "customer") redirect("/dashboard/receipts?error=customer");
   if (result.createdCustomer) await prisma.auditLog.create({ data: { actorId: actor.id, action: "created", entityType: "Customer", entityId: result.createdCustomer.id, summary: `Created customer ${result.createdCustomer.name} from a receipt` } });
