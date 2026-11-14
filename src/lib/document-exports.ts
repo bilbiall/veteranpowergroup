@@ -29,6 +29,7 @@ import {
   formatDocumentNumber,
 } from "@/lib/document-export-data";
 import { companyKraPin, visibleDocumentPaymentDetails } from "@/lib/document-payment-details";
+import { RECEIPT_WARRANTY_HEADING, resolveDocumentTerms } from "@/lib/document-terms";
 
 export type ExportFormat = "docx" | "xlsx" | "pdf";
 
@@ -40,7 +41,7 @@ function documentTitle(document: ExportDocument) {
 }
 
 function documentTerms(document: ExportDocument) {
-  return document.terms ?? document.company.documents?.terms ?? "";
+  return resolveDocumentTerms(document);
 }
 
 function documentDateSummary(document: ExportDocument) {
@@ -59,27 +60,11 @@ function relatedDocumentLines(document: ExportDocument) {
   return lines;
 }
 
-function companyLogo(document: ExportDocument) {
-  return document.company.branding?.logo ?? {
-    filename: "veteran-power-solutions-logo.jpeg",
-    mimeType: "image/jpeg",
-    url: "/veteran-power-solutions-logo.jpeg",
-  };
-}
-
-function logoBytes(url: string) {
-  if (url.startsWith("/")) return readFileSync(path.join(process.cwd(), "public", url.slice(1)));
-  if (!url.startsWith("data:image/")) throw new Error("Company logo must be a data image or a public file.");
-  const base64 = url.slice(url.indexOf(",") + 1);
-  return Uint8Array.from(Buffer.from(base64, "base64"));
-}
-
-function companyLogoBytes(document: ExportDocument) {
-  const logo = companyLogo(document);
+function companyLogoBytes() {
   try {
-    return Buffer.from(logoBytes(logo.url));
+    return readFileSync(path.join(process.cwd(), "public", "veteran-document-logo.png"));
   } catch {
-    return readFileSync(path.join(process.cwd(), "public", "veteran-power-solutions-logo.jpeg"));
+    return readFileSync(path.join(process.cwd(), "public", "veteran-brand-icon.png"));
   }
 }
 
@@ -89,10 +74,9 @@ function wordCell(value: string, bold = false) {
 
 async function createWordDocument(document: ExportDocument) {
   const company = document.company.profile;
-  const logo = companyLogo(document);
   const companyContact = [company?.email, company?.phone].filter((value): value is string => Boolean(value));
   const rows = [
-    new TableRow({ children: ["Description", "Qty", `Unit price (${document.currency})`, `Discount (${document.currency})`, `Tax (${document.currency})`, `Total (${document.currency})`].map((value) => wordCell(value, true)) }),
+    new TableRow({ tableHeader: true, children: ["Description", "Qty", `Unit price (${document.currency})`, `Discount (${document.currency})`, `Tax (${document.currency})`, `Total (${document.currency})`].map((value) => wordCell(value, true)) }),
     ...document.items.map((item) => new TableRow({ children: [
       wordCell(item.description),
       wordCell(formatDocumentNumber(item.quantity)),
@@ -103,7 +87,7 @@ async function createWordDocument(document: ExportDocument) {
     ] })),
   ];
   const section = [
-    new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: logo.mimeType === "image/png" ? "png" : "jpg", data: Uint8Array.from(companyLogoBytes(document)).buffer as ArrayBuffer, transformation: { width: 190, height: 68 } })] }),
+    new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: "png", data: Uint8Array.from(companyLogoBytes()).buffer as ArrayBuffer, transformation: { width: 180, height: 63 } })] }),
     new Paragraph({ text: company?.name ?? "Company details to be confirmed", heading: HeadingLevel.HEADING_2 }),
     ...(company?.address ? [new Paragraph(company.address)] : []),
     ...(companyContact.length ? [new Paragraph(companyContact.join(" · "))] : []),
@@ -134,7 +118,9 @@ async function createWordDocument(document: ExportDocument) {
     ...(visibleDocumentPaymentDetails.length ? [new Paragraph({ text: "Payment details", heading: HeadingLevel.HEADING_3, spacing: { before: 120, after: 60 } }), ...visibleDocumentPaymentDetails.map((detail) => new Paragraph({ text: `${detail.label}: ${detail.value}`, ...(detail.breakBefore ? { spacing: { before: 160 } } : {}) }))] : []),
     ...(document.type === "RECEIPT" && companyKraPin ? [new Paragraph({ text: `KRA PIN: ${companyKraPin}`, spacing: { before: 160 } })] : []),
     ...(document.payment ? [new Paragraph(`Payment: ${formatDocumentCurrency(document.payment.amount, document.currency)} via ${document.payment.method.replaceAll("_", " ")} on ${document.payment.paidAt.toLocaleDateString("en")}`)] : []),
-    ...(documentTerms(document) ? [new Paragraph({ text: "Terms", heading: HeadingLevel.HEADING_3, spacing: { before: 280 } }), new Paragraph(documentTerms(document))] : []),
+    new Paragraph({ text: "Terms", heading: HeadingLevel.HEADING_3, spacing: { before: 280 } }),
+    ...documentTerms(document).split("\n").map((line) => new Paragraph(line)),
+    ...(document.type === "RECEIPT" ? [new Paragraph({ text: RECEIPT_WARRANTY_HEADING, heading: HeadingLevel.HEADING_3, spacing: { before: 180 } })] : []),
     ...(document.company.documents?.footer ? [new Paragraph({ text: document.company.documents.footer, spacing: { before: 300 } })] : []),
     new Paragraph({ text: "Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.", spacing: { before: 300 } }),
   ];
@@ -161,8 +147,7 @@ async function createWordDocument(document: ExportDocument) {
 async function createSpreadsheet(document: ExportDocument) {
   const workbook = new ExcelJS.Workbook();
   const watermarkId = workbook.addImage({ base64: getWatermark().toString("base64"), extension: "png" });
-  const logo = companyLogo(document);
-  const logoId = workbook.addImage({ base64: companyLogoBytes(document).toString("base64"), extension: logo.mimeType === "image/png" ? "png" : "jpeg" });
+  const logoId = workbook.addImage({ base64: companyLogoBytes().toString("base64"), extension: "png" });
   workbook.creator = document.company.profile?.name ?? "Veteran Power Solutions Limited";
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Document", { views: [{ state: "frozen", ySplit: 9 }] });
@@ -181,7 +166,7 @@ async function createSpreadsheet(document: ExportDocument) {
   sheet.mergeCells("A2:E2");
   sheet.getCell("A2").value = documentTitle(document);
   sheet.getCell("A2").font = { bold: true, size: 14 };
-  sheet.addImage(logoId, "F1:G2");
+  sheet.addImage(logoId, "F1:G3");
   sheet.addRow(document.type === "QUOTATION"
     ? ["Date", document.createdAt, "Currency", document.currency]
     : ["Status", documentStatus(document), "Date", document.createdAt, "Currency", document.currency]);
@@ -222,11 +207,10 @@ async function createSpreadsheet(document: ExportDocument) {
     sheet.addRow([]);
     sheet.addRow(["KRA PIN", companyKraPin]);
   }
-  if (documentTerms(document)) {
-    sheet.addRow([]);
-    sheet.addRow(["Terms", documentTerms(document)]);
-    if (sheet.lastRow) sheet.lastRow.alignment = { wrapText: true, vertical: "top" };
-  }
+  sheet.addRow([]);
+  sheet.addRow(["Terms", documentTerms(document)]);
+  if (sheet.lastRow) sheet.lastRow.alignment = { wrapText: true, vertical: "top" };
+  if (document.type === "RECEIPT") sheet.addRow([RECEIPT_WARRANTY_HEADING]);
   for (const row of sheet.getRows(1, sheet.rowCount) ?? []) {
     for (let column = 2; column <= 7; column += 1) row.getCell(column).numFmt = "#,##0.00;[Red]-#,##0.00";
   }
@@ -241,7 +225,7 @@ async function createSpreadsheet(document: ExportDocument) {
 
 async function createPdf(document: ExportDocument) {
   return new Promise<Buffer>((resolve, reject) => {
-    const pdf = new PDFDocument({ size: "A4", margin: 48, info: { Title: documentTitle(document), Author: document.company.profile?.name ?? "Veteran Power Solutions Limited" } });
+    const pdf = new PDFDocument({ size: "A4", margin: 48, bufferPages: true, info: { Title: documentTitle(document), Author: document.company.profile?.name ?? "Veteran Power Solutions Limited" } });
     const watermark = getWatermark();
     const drawWatermark = () => {
       pdf.save().opacity(1).image(watermark, 66, 338, { fit: [463, 166], align: "center", valign: "center" }).restore();
@@ -256,14 +240,20 @@ async function createPdf(document: ExportDocument) {
     const left = 48;
     const right = 547;
     const pageBottom = 780;
-    const ensureSpace = (height: number) => { if (pdf.y + height > pageBottom) pdf.addPage(); };
+    const drawContinuationHeader = () => {
+      pdf.image(companyLogoBytes(), 397, 34, { fit: [150, 54], align: "center", valign: "center" });
+      pdf.fillColor("#24433a").font("Helvetica-Bold").fontSize(11).text(document.company.profile?.name ?? "Company details to be confirmed", left, 43);
+      pdf.fillColor("#68716c").font("Helvetica").fontSize(9).text(`${documentTitle(document)} · continued`, left, 60);
+      pdf.y = 92;
+    };
+    const ensureSpace = (height: number) => { if (pdf.y + height > pageBottom) { pdf.addPage(); drawContinuationHeader(); } };
     pdf.fillColor("#24433a").font("Helvetica-Bold").fontSize(17).text(document.company.profile?.name ?? "Company details to be confirmed", left);
     pdf.fillColor("#68716c").font("Helvetica").fontSize(9);
     if (document.company.profile?.address) pdf.text(document.company.profile.address);
     const contact = [document.company.profile?.email, document.company.profile?.phone].filter(Boolean).join(" · ");
     if (contact) pdf.text(contact);
     if (document.company.profile?.taxInformation) pdf.text(`Tax information: ${document.company.profile.taxInformation}`);
-    pdf.image(Buffer.from(companyLogoBytes(document)), 408, 42, { fit: [138, 72], align: "center", valign: "center" });
+    pdf.image(companyLogoBytes(), 367, 38, { fit: [180, 65], align: "center", valign: "center" });
     pdf.moveDown(1.6).fillColor("#202a27").font("Helvetica-Bold").fontSize(24).text(documentTitle(document));
     pdf.moveDown(0.5).font("Helvetica").fontSize(10).fillColor("#68716c").text(documentDateSummary(document));
     pdf.moveDown(1.4).fillColor("#202a27").font("Helvetica-Bold").fontSize(11).text("Bill to");
@@ -305,6 +295,7 @@ async function createPdf(document: ExportDocument) {
       const rowHeight = Math.max(28, descriptionHeight + 12);
       if (pdf.y + rowHeight > pageBottom) {
         pdf.addPage();
+        drawContinuationHeader();
         drawHeader();
       }
       const y = pdf.y;
@@ -340,9 +331,15 @@ async function createPdf(document: ExportDocument) {
     if (document.type === "RECEIPT" && companyKraPin) pdf.moveDown(0.6).font("Helvetica").fontSize(9).fillColor("#68716c").text(`KRA PIN: ${companyKraPin}`, left);
     pdf.moveDown(0.8);
     if (document.payment) pdf.font("Helvetica").fontSize(9).fillColor("#68716c").text(`Payment: ${formatDocumentCurrency(document.payment.amount, document.currency)} via ${document.payment.method.replaceAll("_", " ")} on ${document.payment.paidAt.toLocaleDateString("en")}`);
-    if (documentTerms(document)) pdf.moveDown().font("Helvetica-Bold").text("Terms").font("Helvetica").text(documentTerms(document));
+    pdf.moveDown().font("Helvetica-Bold").text("Terms").font("Helvetica").text(documentTerms(document));
+    if (document.type === "RECEIPT") pdf.moveDown(0.7).font("Helvetica-Bold").text(RECEIPT_WARRANTY_HEADING).font("Helvetica");
     if (document.company.documents?.footer) pdf.moveDown().text(document.company.documents.footer);
     pdf.moveDown().fontSize(8).fillColor("#68716c").text("Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.");
+    const pages = pdf.bufferedPageRange();
+    for (let index = 0; index < pages.count; index += 1) {
+      pdf.switchToPage(index);
+      pdf.fillColor("#68716c").font("Helvetica").fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 770, { width: right - left, align: "center", lineBreak: false });
+    }
     pdf.end();
   });
 }

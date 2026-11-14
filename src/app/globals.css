@@ -122,7 +122,7 @@ td { color: var(--ink); }
 .preview-company .eyebrow { color: var(--ink); font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 600; letter-spacing: -.03em; margin: 0 0 10px; text-transform: none; }
 .preview-type { display: grid; gap: 5px; text-align: right; }
 .preview-company-brand { align-items: end; display: grid; gap: 12px; justify-items: end; }
-.preview-company-logo { background: #fff; height: auto; max-height: 62px; max-width: min(220px, 32vw); object-fit: contain; }
+  .preview-company-logo { background: transparent; height: auto; max-height: 62px; max-width: min(220px, 32vw); object-fit: contain; width: 220px; }
 .preview-type span { color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .preview-type strong { font-family: var(--font-space-grotesk); font-size: 18px; }
 .preview-type small { color: var(--muted); font-size: 10px; }

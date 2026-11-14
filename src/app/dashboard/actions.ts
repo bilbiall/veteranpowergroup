@@ -11,6 +11,7 @@ import { getSchoolPaymentPlan } from "@/lib/school-payment-plans";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 import { isPortfolioMediaType } from "@/lib/portfolio-media";
 import { documentSection, isStaffAccessKey, isStaffSectionKey } from "@/lib/staff-sections";
+import { defaultTermsForDocument, RECEIPT_TERMS } from "@/lib/document-terms";
 
 const staffAccountSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -76,7 +77,7 @@ const schoolPlanSchema = z.object({
 });
 const documentIdSchema = z.object({ documentId: z.string().min(1) });
 const paymentSchema = z.object({ invoiceId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
-const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), ...customerSelectionFields, currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() }).superRefine((value, context) => {
+const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), ...customerSelectionFields, terms: z.string().trim().max(8000).optional(), currency: z.enum(["KES", "USD"]).optional(), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() }).superRefine((value, context) => {
   if (value.sourceDocumentId && value.customerId === "__new__") {
     context.addIssue({ code: "custom", path: ["customerId"], message: "Linked receipts must use the source document customer" });
   } else if (!value.sourceDocumentId && (value.customerId === "__new__" ? !value.newCustomerName : !value.customerId)) {
@@ -313,7 +314,7 @@ export async function createQuotation(formData: FormData) {
     const document = await tx.document.create({
       data: {
         number, type: "QUOTATION", quotationStatus: "SENT", subtotal, tax, total,
-        currency: "KES", terms: parsed.data.terms || null,
+        currency: "KES", terms: parsed.data.terms || defaultTermsForDocument("QUOTATION"),
         customerId: customer.customer.id, ownerId: owner.id, companyId: 1, sequenceYear: year, sequenceValue,
         items: { create: rows.map((row) => { const item = { ...row }; delete item.itemId; return item; }) },
       },
@@ -357,7 +358,7 @@ export async function createStandaloneInvoice(formData: FormData) {
         tax,
         total: Math.round((subtotal + tax) * 100) / 100,
         currency: "KES",
-        terms: parsed.data.terms || null,
+        terms: parsed.data.terms || defaultTermsForDocument("INVOICE"),
         customerId: selectedCustomer.customer.id,
         ownerId: actor.id,
         companyId: company.id,
@@ -541,6 +542,7 @@ export async function createReceipt(formData: FormData) {
         tax,
         total: amount,
         currency,
+        terms: parsed.data.terms || RECEIPT_TERMS,
         customerId,
         ownerId: actor.id,
         companyId: source?.companyId ?? 1,
@@ -634,7 +636,7 @@ export async function updateReceiptDetails(formData: FormData) {
     }
     const removedItemIds = receipt.items.filter((item) => !submittedItemIds.includes(item.id)).map((item) => item.id);
     if (removedItemIds.length) await tx.documentItem.deleteMany({ where: { id: { in: removedItemIds }, documentId: receipt.id } });
-    await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount, terms: parsed.data.terms || null, customerId: paymentData.customerId } });
+    await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount, terms: parsed.data.terms || RECEIPT_TERMS, customerId: paymentData.customerId } });
     if (receipt.sourceDocument?.type === "INVOICE") {
       const invoiceStatus = revisedPaidTotal >= receipt.sourceDocument.total - 0.005 ? "PAID" : revisedPaidTotal > 0 ? "PARTIALLY_PAID" : "ISSUED";
       await tx.document.update({ where: { id: receipt.sourceDocument.id }, data: { invoiceStatus } });
@@ -739,7 +741,7 @@ export async function updateQuotationOrInvoice(formData: FormData) {
       }
     }
 
-    await tx.document.update({ where: { id: document.id }, data: { customerId: selectedCustomer.customer.id, terms, subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 } });
+    await tx.document.update({ where: { id: document.id }, data: { customerId: selectedCustomer.customer.id, terms: terms || defaultTermsForDocument(document.type), subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 } });
     return { status: "updated" as const, createdCustomer: selectedCustomer.created ? selectedCustomer.customer : null };
   });
   if (result.status === "invalid") redirect(`${path}?edit=invalid`);
