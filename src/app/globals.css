@@ -141,6 +141,7 @@ td { color: var(--ink); }
 .preview-payment-details h2 { color: var(--ink); font-family: var(--font-space-grotesk); font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 .preview-payment-details p { color: var(--muted); font-size: 10px; line-height: 1.5; margin: 3px 0; }
 .preview-payment-details .payment-details-break { margin-top: 14px; }
+.preview-payment-details .receipt-kra-pin { margin-top: 14px; }
 .preview-payment-details span { color: var(--ink); font-weight: 600; }
 .preview-terms { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
 .preview-terms h2 { font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 500; }

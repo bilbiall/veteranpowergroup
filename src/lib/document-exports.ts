@@ -132,7 +132,7 @@ async function createWordDocument(document: ExportDocument) {
     new Paragraph({ text: `Tax: ${formatDocumentCurrency(document.tax, document.currency)}`, alignment: AlignmentType.RIGHT }),
     new Paragraph({ children: [new TextRun({ text: `Total: ${formatDocumentCurrency(document.total, document.currency)}`, bold: true, size: 26 })], alignment: AlignmentType.RIGHT, spacing: { before: 80, after: 160 } }),
     ...(visibleDocumentPaymentDetails.length ? [new Paragraph({ text: "Payment details", heading: HeadingLevel.HEADING_3, spacing: { before: 120, after: 60 } }), ...visibleDocumentPaymentDetails.map((detail) => new Paragraph({ text: `${detail.label}: ${detail.value}`, ...(detail.breakBefore ? { spacing: { before: 160 } } : {}) }))] : []),
-    ...(document.type === "RECEIPT" && companyKraPin ? [new Paragraph(`KRA PIN: ${companyKraPin}`)] : []),
+    ...(document.type === "RECEIPT" && companyKraPin ? [new Paragraph({ text: `KRA PIN: ${companyKraPin}`, spacing: { before: 160 } })] : []),
     ...(document.payment ? [new Paragraph(`Payment: ${formatDocumentCurrency(document.payment.amount, document.currency)} via ${document.payment.method.replaceAll("_", " ")} on ${document.payment.paidAt.toLocaleDateString("en")}`)] : []),
     ...(documentTerms(document) ? [new Paragraph({ text: "Terms", heading: HeadingLevel.HEADING_3, spacing: { before: 280 } }), new Paragraph(documentTerms(document))] : []),
     ...(document.company.documents?.footer ? [new Paragraph({ text: document.company.documents.footer, spacing: { before: 300 } })] : []),
@@ -218,7 +218,10 @@ async function createSpreadsheet(document: ExportDocument) {
       sheet.addRow([detail.label, detail.value]);
     });
   }
-  if (document.type === "RECEIPT" && companyKraPin) sheet.addRow(["KRA PIN", companyKraPin]);
+  if (document.type === "RECEIPT" && companyKraPin) {
+    sheet.addRow([]);
+    sheet.addRow(["KRA PIN", companyKraPin]);
+  }
   if (documentTerms(document)) {
     sheet.addRow([]);
     sheet.addRow(["Terms", documentTerms(document)]);
@@ -334,7 +337,7 @@ async function createPdf(document: ExportDocument) {
         pdf.text(`${detail.label}: ${detail.value}`, left);
       }
     }
-    if (document.type === "RECEIPT" && companyKraPin) pdf.font("Helvetica").fontSize(9).fillColor("#68716c").text(`KRA PIN: ${companyKraPin}`, left);
+    if (document.type === "RECEIPT" && companyKraPin) pdf.moveDown(0.6).font("Helvetica").fontSize(9).fillColor("#68716c").text(`KRA PIN: ${companyKraPin}`, left);
     pdf.moveDown(0.8);
     if (document.payment) pdf.font("Helvetica").fontSize(9).fillColor("#68716c").text(`Payment: ${formatDocumentCurrency(document.payment.amount, document.currency)} via ${document.payment.method.replaceAll("_", " ")} on ${document.payment.paidAt.toLocaleDateString("en")}`);
     if (documentTerms(document)) pdf.moveDown().font("Helvetica-Bold").text("Terms").font("Helvetica").text(documentTerms(document));
