@@ -44,6 +44,7 @@ const customerSchema = z.object({
   phone: z.string().trim().max(40).optional(),
   company: z.string().trim().max(120).optional(),
 });
+const customerIdSchema = z.object({ customerId: z.string().min(1) });
 
 const customerSelectionFields = {
   customerId: z.string().optional(),
@@ -207,6 +208,77 @@ export async function createCustomer(formData: FormData) {
       data: { actorId: actor.id, action: "created", entityType: "Customer", entityId: customer.id, summary: `Created customer ${customer.name}` },
   });
   redirect("/dashboard/customers?created=1");
+}
+
+export async function deleteCustomer(formData: FormData) {
+  const session = await requireSectionAccess("customers");
+  const parsed = customerIdSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/dashboard/customers?delete=missing");
+
+  const result = await prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findUnique({ where: { id: parsed.data.customerId }, include: { _count: { select: { documents: true, payments: true } } } });
+    if (!customer) return "missing" as const;
+    if (customer._count.documents || customer._count.payments) return "linked" as const;
+    await tx.customer.delete({ where: { id: customer.id } });
+    await tx.auditLog.create({ data: { actorId: session.userId, action: "deleted", entityType: "Customer", entityId: customer.id, summary: `Deleted customer ${customer.name}` } });
+    return "deleted" as const;
+  });
+
+  if (result !== "deleted") redirect(`/dashboard/customers?delete=${result}`);
+  revalidatePath("/dashboard/customers");
+  redirect("/dashboard/customers?deleted=1");
+}
+
+function normalizeCustomerIdentity(value: string | null | undefined) {
+  return (value ?? "").normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en");
+}
+
+export async function mergeDuplicateCustomers(formData: FormData) {
+  const session = await requireSectionAccess("customers");
+  const parsed = customerIdSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/dashboard/customers?merge=missing");
+
+  const result = await prisma.$transaction(async (tx) => {
+    const customers = await tx.customer.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+    const selected = customers.find((customer) => customer.id === parsed.data.customerId);
+    if (!selected) return { error: "missing" as const };
+    const nameKey = normalizeCustomerIdentity(selected.name);
+    const companyKey = normalizeCustomerIdentity(selected.company);
+    const matches = customers.filter((customer) => normalizeCustomerIdentity(customer.name) === nameKey && normalizeCustomerIdentity(customer.company) === companyKey);
+    if (matches.length < 2) return { error: "not-duplicate" as const };
+
+    const keeper = matches[0];
+    const duplicates = matches.slice(1);
+    const duplicateIds = duplicates.map((customer) => customer.id);
+    const updates: { email?: string | null; phone?: string | null; address?: string | null } = {};
+    for (const field of ["email", "phone", "address"] as const) {
+      if (!keeper[field]) updates[field] = duplicates.map((customer) => customer[field]).find((value) => Boolean(value?.trim())) ?? null;
+    }
+    if (Object.keys(updates).length) await tx.customer.update({ where: { id: keeper.id }, data: updates });
+    await tx.document.updateMany({ where: { customerId: { in: duplicateIds } }, data: { customerId: keeper.id } });
+    await tx.payment.updateMany({ where: { customerId: { in: duplicateIds } }, data: { customerId: keeper.id } });
+    await tx.media.updateMany({ where: { customerId: { in: duplicateIds } }, data: { customerId: keeper.id } });
+    await tx.customer.deleteMany({ where: { id: { in: duplicateIds } } });
+    await tx.auditLog.create({ data: {
+      actorId: session.userId,
+      action: "merged",
+      entityType: "Customer",
+      entityId: keeper.id,
+      summary: `Merged ${duplicates.length} duplicate customer record${duplicates.length === 1 ? "" : "s"} into ${keeper.name}`,
+      metadata: {
+        mergedCustomers: duplicates.map(({ id, name, company, email, phone, address }) => ({ id, name, company, email, phone, address })),
+        company: keeper.company,
+      },
+    } });
+    return { error: null, merged: duplicates.length };
+  });
+
+  if (result.error) redirect(`/dashboard/customers?merge=${result.error}`);
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/quotations");
+  revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard/receipts");
+  redirect(`/dashboard/customers?merged=${result.merged}`);
 }
 
 export async function createQuotation(formData: FormData) {

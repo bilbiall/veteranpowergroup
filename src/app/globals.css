@@ -350,6 +350,9 @@ td { color: var(--ink); }
 .table-delete-button { background: transparent; border: 1px solid #a84532; color: #d16f5a; cursor: pointer; font: inherit; font-size: 12px; padding: 6px 10px; }
 .table-delete-button:hover { background: #a84532; color: #fff; }
 .table-delete-button:disabled { cursor: not-allowed; opacity: .45; }
+.customer-row-actions { white-space: nowrap; }
+.customer-row-actions form { display: inline-flex; margin-right: 12px; }
+.customer-duplicate-note { color: var(--orange); font-size: 10px; }
 .document-bulk-delete-toolbar { align-items: center; display: flex; flex-direction: column; gap: 8px; min-width: 120px; }
 .document-bulk-delete-toolbar form { margin: 0; }
 .bulk-select-all { align-items: center; display: inline-flex; gap: 6px; white-space: nowrap; }
