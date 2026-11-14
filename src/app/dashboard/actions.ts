@@ -83,7 +83,7 @@ const receiptCreateSchema = z.object({ sourceDocumentId: z.string().optional(), 
     context.addIssue({ code: "custom", path: ["customerId"], message: "Choose or create a customer" });
   }
 });
-const receiptEditSchema = z.object({ documentId: z.string().min(1), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
+const receiptEditSchema = z.object({ documentId: z.string().min(1), ...customerSelectionFields, terms: z.string().trim().max(8000).optional(), amount: z.coerce.number().positive().max(100000000), method: z.enum(["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"]), reference: z.string().trim().max(120).optional() });
 const documentLineSchema = z.object({ itemId: z.string().optional(), description: z.string().trim().min(2).max(250), quantity: z.coerce.number().positive().max(100000), unitPrice: z.coerce.number().nonnegative().max(100000000), discount: z.coerce.number().nonnegative().max(100000000), taxRate: z.coerce.number().nonnegative().max(100) });
 
 function parseLineItems(formData: FormData, prefix = "") {
@@ -585,6 +585,8 @@ export async function updateReceiptDetails(formData: FormData) {
   const session = await requireSectionAccess("receipts");
   const parsed = receiptEditSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/dashboard/documents/${String(formData.get("documentId") ?? "")}?receipt=invalid`);
+  const customerSelection = customerSelectionSchema.safeParse(parsed.data);
+  if (!customerSelection.success || !customerSelection.data.customerId) redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=invalid`);
 
   const calculatedRows = parseLineItems(formData, "receipt");
   if (!calculatedRows?.length) {
@@ -600,19 +602,29 @@ export async function updateReceiptDetails(formData: FormData) {
       where: { id: parsed.data.documentId },
       include: { payment: true, items: { orderBy: { sortOrder: "asc" } }, sourceDocument: { include: { payments: { select: { id: true, amount: true } } } } },
     });
-    if (!receipt || receipt.type !== "RECEIPT" || receipt.receiptStatus !== "ISSUED" || !receipt.payment || (receipt.sourceDocument && !["INVOICE", "QUOTATION"].includes(receipt.sourceDocument.type))) return { error: "link" as const };
+    if (!receipt || receipt.type !== "RECEIPT" || receipt.receiptStatus !== "ISSUED" || (receipt.sourceDocument && !["INVOICE", "QUOTATION"].includes(receipt.sourceDocument.type))) return { error: "link" as const };
 
     const existingItemIds = new Set(receipt.items.map((item) => item.id));
     const submittedItemIds = calculatedRows.filter((row) => row.itemId).map((row) => row.itemId as string);
     if (new Set(submittedItemIds).size !== submittedItemIds.length || submittedItemIds.some((itemId) => !existingItemIds.has(itemId))) return { error: "link" as const };
 
+    const selectedCustomer = receipt.sourceDocument
+      ? customerSelection.data.customerId === receipt.sourceDocument.customerId && customerSelection.data.customerId !== "__new__"
+        ? await tx.customer.findUnique({ where: { id: receipt.sourceDocument.customerId }, select: { id: true } })
+        : null
+      : await resolveCustomer(tx, customerSelection.data);
+    if (!selectedCustomer) return { error: "customer" as const };
+
     const paidByOtherReceipts = receipt.sourceDocument?.payments
-      .filter((payment) => payment.id !== receipt.payment!.id)
+      .filter((payment) => payment.id !== receipt.payment?.id)
       .reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
     const revisedPaidTotal = Math.round((paidByOtherReceipts + amount) * 100) / 100;
     if (receipt.sourceDocument && revisedPaidTotal > Math.round(receipt.sourceDocument.total * 100) / 100 + 0.005) return { error: "balance" as const };
 
-    await tx.payment.update({ where: { id: receipt.payment.id }, data: { amount, method: parsed.data.method, reference: parsed.data.reference || null } });
+    const selectedCustomerId = "customer" in selectedCustomer ? selectedCustomer.customer.id : selectedCustomer.id;
+    const paymentData = { amount, method: parsed.data.method, reference: parsed.data.reference || null, customerId: selectedCustomerId };
+    if (receipt.payment) await tx.payment.update({ where: { id: receipt.payment.id }, data: paymentData });
+    else await tx.payment.create({ data: { ...paymentData, documentId: receipt.sourceDocument?.id ?? null, receiptId: receipt.id } });
     for (const row of calculatedRows) {
       if (row.itemId) {
         await tx.documentItem.update({ where: { id: row.itemId }, data: { description: row.description, quantity: row.quantity, unitPrice: row.unitPrice, discount: row.discount, taxRate: row.taxRate, amount: row.amount, taxAmount: row.taxAmount, total: row.total, sortOrder: row.sortOrder } });
@@ -622,17 +634,21 @@ export async function updateReceiptDetails(formData: FormData) {
     }
     const removedItemIds = receipt.items.filter((item) => !submittedItemIds.includes(item.id)).map((item) => item.id);
     if (removedItemIds.length) await tx.documentItem.deleteMany({ where: { id: { in: removedItemIds }, documentId: receipt.id } });
-    await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount } });
+    await tx.document.update({ where: { id: receipt.id }, data: { subtotal, tax, total: amount, terms: parsed.data.terms || null, customerId: paymentData.customerId } });
     if (receipt.sourceDocument?.type === "INVOICE") {
       const invoiceStatus = revisedPaidTotal >= receipt.sourceDocument.total - 0.005 ? "PAID" : revisedPaidTotal > 0 ? "PARTIALLY_PAID" : "ISSUED";
       await tx.document.update({ where: { id: receipt.sourceDocument.id }, data: { invoiceStatus } });
     }
-    return { error: null as null, receiptNumber: receipt.number, sourceNumber: receipt.sourceDocument?.number ?? null };
+    return { error: null as null, receiptNumber: receipt.number, sourceNumber: receipt.sourceDocument?.number ?? null, createdCustomer: "customer" in selectedCustomer && selectedCustomer.created ? selectedCustomer.customer : null };
   });
 
   if (result.error === "link") redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=unavailable`);
   if (result.error === "balance") redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=balance`);
+  if (result.error === "customer") redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=customer`);
+  if (result.createdCustomer) await prisma.auditLog.create({ data: { actorId: session.userId, action: "created", entityType: "Customer", entityId: result.createdCustomer.id, summary: `Created customer ${result.createdCustomer.name} from a receipt edit` } });
   await prisma.auditLog.create({ data: { actorId: session.userId, action: "updated", entityType: "Receipt", entityId: parsed.data.documentId, summary: `Updated receipt ${result.receiptNumber}${result.sourceNumber ? ` linked to ${result.sourceNumber}` : ""}` } });
+  revalidatePath("/dashboard/receipts");
+  revalidatePath("/dashboard/invoices");
   redirect(`/dashboard/documents/${parsed.data.documentId}?receipt=updated`);
 }
 

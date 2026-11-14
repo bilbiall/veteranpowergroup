@@ -140,6 +140,7 @@ td { color: var(--ink); }
 .preview-payment-details { margin: 24px 0 0; max-width: 340px; }
 .preview-payment-details h2 { color: var(--ink); font-family: var(--font-space-grotesk); font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 .preview-payment-details p { color: var(--muted); font-size: 10px; line-height: 1.5; margin: 3px 0; }
+.preview-payment-details .payment-details-break { margin-top: 14px; }
 .preview-payment-details span { color: var(--ink); font-weight: 600; }
 .preview-terms { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
 .preview-terms h2 { font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 500; }
@@ -359,9 +360,14 @@ td { color: var(--ink); }
 form[aria-busy="true"] button[type="submit"] { cursor: wait; opacity: .72; }
 @media (max-width: 760px) { .document-delete-panel { align-items: stretch; flex-direction: column; } .document-delete-panel form, .document-delete-panel .danger-button { width: 100%; } }
 .document-edit-form { display: grid; gap: 14px; }
-.document-edit-form > label { color: var(--muted); display: grid; font-size: 11px; font-weight: 600; gap: 6px; max-width: 520px; }
+.document-edit-fields { border: 0; display: grid; gap: 14px; margin: 0; min-width: 0; padding: 0; }
+.document-edit-form > label, .document-edit-fields > label { color: var(--muted); display: grid; font-size: 11px; font-weight: 600; gap: 6px; max-width: 520px; }
 .document-edit-form input, .document-edit-form select { background: #fbfcfa; border: 1px solid var(--line); border-radius: 2px; color: var(--ink); font: inherit; font-size: 12px; min-height: 39px; padding: 8px; width: 100%; }
 .document-edit-form textarea { background: #fbfcfa; border: 1px solid var(--line); border-radius: 2px; color: var(--ink); font: inherit; font-size: 12px; line-height: 1.55; min-height: 110px; padding: 10px; resize: vertical; width: 100%; }
+.document-edit-fields:disabled { opacity: .68; }
+.receipt-edit-form > label { max-width: 520px; }
+.receipt-edit-form .receipt-editor-note { align-self: center; }
+.receipt-legacy-description { display: none !important; }
 .document-edit-table { min-width: 780px; }
 .document-edit-table th, .document-edit-table td { border: 1px solid var(--line); padding: 8px; }
 .document-edit-table input { min-width: 90px; }
