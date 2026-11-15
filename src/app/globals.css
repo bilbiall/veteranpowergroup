@@ -191,6 +191,11 @@ td { color: var(--ink); }
 .portfolio-callout .eyebrow { margin-bottom: 8px; }
 .portfolio-callout h3 { font-size: 24px; font-weight: 500; }
 .contact-section { align-items: start; gap: 8vw; }
+.contact-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.contact-action { align-items: center; background: transparent; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; color: inherit; cursor: pointer; display: inline-flex; font: inherit; gap: 8px; min-height: 42px; padding: 9px 15px; text-decoration: none; transition: background-color .18s ease, border-color .18s ease, transform .18s ease; }
+.contact-action:hover, .contact-action:focus-visible { background: rgba(255,255,255,.1); border-color: var(--lime); color: inherit; transform: translateY(-1px); }
+.contact-action span[aria-hidden="true"] { color: var(--lime); font-size: 16px; }
+.contact-action-feedback { color: var(--lime); font-size: 13px; width: 100%; }
 .contact-form-wrap { flex: 0 1 480px; }
 .contact-form { background: #fff; color: var(--ink); display: grid; gap: 13px; grid-template-columns: 1fr 1fr; padding: 25px; }
 .contact-form .eyebrow, .contact-form > .contact-feedback { grid-column: 1 / -1; margin: 0; }

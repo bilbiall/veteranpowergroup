@@ -43,7 +43,11 @@ function documentTitle(document: ExportDocument) {
 }
 
 function documentTerms(document: ExportDocument) {
-  return resolveDocumentTerms(document);
+  return resolveDocumentTerms(document)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/([.!?])\s+[A-Z]$/u, "$1").trimEnd())
+    .filter((line) => !/^[A-Z]$/u.test(line.trim()))
+    .join("\n");
 }
 
 function documentDateSummary(document: ExportDocument) {
