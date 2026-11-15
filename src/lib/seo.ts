@@ -41,7 +41,7 @@ export const business = {
   locality: "Nairobi",
   country: "KE",
   facebook: "https://web.facebook.com/veteranmailu",
-  logo: `${siteUrl}/veteran-power-solutions-logo.png`,
+  logo: `${siteUrl}/veteran-document-logo.png`,
   image: `${siteUrl}/veteran-renewable-hero.png`,
 };
 

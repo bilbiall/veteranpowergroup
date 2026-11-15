@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireSectionAccess } from "@/lib/prototype-auth";
+import { getStaffAccess, requireSectionAccess } from "@/lib/prototype-auth";
 
 const numberFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 0 });
 const amountFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 
 export default async function Dashboard() {
-  await requireSectionAccess("dashboard");
+  const session = await requireSectionAccess("dashboard");
+  const access = await getStaffAccess(session.userId);
+  const canSeeFindings = access.sections.includes("findings") || access.sections.includes("report-findings");
   const since = new Date();
   since.setMonth(since.getMonth() - 5, 1);
   since.setHours(0, 0, 0, 0);
-  const [customerCount, documents, recentActivity, invoices, pageViews] = await Promise.all([
+  const [customerCount, documents, recentFindings, invoices, pageViews] = await Promise.all([
     prisma.customer.count(),
     prisma.document.groupBy({ by: ["type"], _sum: { total: true }, _count: { _all: true } }),
-    prisma.auditLog.findMany({ take: 4, orderBy: { createdAt: "desc" }, select: { id: true, summary: true, createdAt: true, actor: { select: { name: true, email: true } } } }),
+    canSeeFindings ? prisma.finding.findMany({ take: 4, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, details: true, priority: true, status: true, updatedAt: true } }) : Promise.resolve([]),
     prisma.document.findMany({ where: { type: "INVOICE", createdAt: { gte: since } }, select: { total: true, createdAt: true } }),
     prisma.websiteVisit.count(),
   ]);
@@ -38,8 +40,8 @@ export default async function Dashboard() {
     <header className="dashboard-header"><div><p className="dashboard-kicker">{new Date().toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p><h1>Your workspace</h1></div><span className="prototype-badge">Prototype · sample data</span></header>
     <section className="dashboard-intro"><div><p className="eyebrow">Veteran staff portal</p><h2>A clear view of <span>what&apos;s moving.</span></h2><p className="dashboard-note">Figures use fictional local data and provisional rules.</p></div><Link className="dashboard-button" href="/dashboard/quotations">+ New quotation</Link></section>
     <section className="metrics-grid" aria-label="Workspace summary">{metrics.map(([label, value, caption]) => <article className="metric-card" key={label}><div className="metric-head"><span>{label}</span><span className="metric-more" aria-hidden="true">•••</span></div><strong>{value}</strong><p>{caption}</p></article>)}</section>
-    <section className="dashboard-lower"><article className="panel activity-panel"><div className="panel-heading"><div><p className="eyebrow">Sample workspace</p><h3>Recent activity</h3></div><Link href="/dashboard/quotations">Quotations ↗</Link></div>
-      {recentActivity.length === 0 ? <p className="empty-state">Activity will appear here as you add sample records.</p> : recentActivity.map((entry) => <div className="activity-row" key={entry.id}><span className="activity-avatar green" aria-hidden="true">N</span><div><b>{entry.summary}</b><p>{entry.actor?.name ?? entry.actor?.email ?? "Prototype admin"}</p></div><time dateTime={entry.createdAt.toISOString()}>{entry.createdAt.toLocaleDateString("en", { month: "short", day: "numeric" })}</time></div>)}
+    <section className="dashboard-lower"><article className="panel activity-panel"><div className="panel-heading"><div><p className="eyebrow">Insights</p><h3>Recent findings</h3></div>{canSeeFindings && <Link href="/dashboard/findings">All findings ↗</Link>}</div>
+      {!canSeeFindings || recentFindings.length === 0 ? <p className="empty-state">Findings will appear here when you have access and records are added.</p> : recentFindings.map((finding) => <div className="activity-row" key={finding.id}><span className={`activity-avatar ${finding.priority === "HIGH" ? "orange" : "green"}`} aria-hidden="true">{finding.priority[0]}</span><div><b>{finding.title}</b><p>{finding.status.replaceAll("_", " ")} · {finding.priority} · {finding.details}</p></div><time dateTime={finding.updatedAt.toISOString()}>{finding.updatedAt.toLocaleDateString("en", { month: "short", day: "numeric" })}</time></div>)}
     </article><article className="panel chart-panel"><div className="panel-heading"><div><p className="eyebrow">Invoice totals</p><h3>Recent six months</h3></div><span className="prototype-badge">No currency set</span></div><div className="chart-value">{amountFormat.format(invoices.reduce((sum, invoice) => sum + invoice.total, 0))}</div><div className="chart"><div className="chart-grid-lines"><i /><i /><i /><i /></div><svg viewBox="0 0 500 155" preserveAspectRatio="none" role="img" aria-label="Invoice totals over the last six months"><polyline points={points} fill="none" stroke="#087a45" strokeWidth="3" vectorEffect="non-scaling-stroke" /></svg></div><div className="chart-labels">{months.map((month) => <span key={month.label}>{month.label}</span>)}</div></article></section>
   </main>;
 }

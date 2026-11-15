@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { firstAllowedHref, isStaffAccessKey, staffAccessKeys, type StaffAccessKey } from "@/lib/staff-sections";
+import { firstAllowedHref, isStaffAccessKey, reportAccessKeys, staffAccessKeys, type StaffAccessKey } from "@/lib/staff-sections";
 
 const cookieName = "northstar_staff_session";
 const sessionLifetimeSeconds = 60 * 60 * 8;
@@ -140,7 +140,20 @@ export async function getStaffAccess(userId: string): Promise<StaffAccess> {
     select: { sectionAccess: true, roles: { select: { role: { select: { name: true } } } } },
   });
   const isAdmin = Boolean(user?.roles.some(({ role }) => role.name === adminRoleName));
-  return { isAdmin, sections: isAdmin ? [...staffAccessKeys] : (user?.sectionAccess ?? []).filter(isStaffAccessKey) };
+  const sections = isAdmin ? [...staffAccessKeys] : (user?.sectionAccess ?? []).filter(isStaffAccessKey);
+  // Existing staff who had Reports before per-report access was introduced retain their prior visibility.
+  if (!isAdmin && sections.includes("reports") && !sections.some((key) => reportAccessKeys.includes(key as (typeof reportAccessKeys)[number]))) {
+    sections.push(...reportAccessKeys as StaffAccessKey[]);
+  }
+  if (sections.includes("manage-staff") && !sections.includes("settings")) sections.push("settings");
+  return { isAdmin, sections };
+}
+
+export async function requireStaffManagementSession() {
+  const session = await requirePrototypeSession();
+  const access = await getStaffAccess(session.userId);
+  if (!access.isAdmin && !access.sections.includes("manage-staff")) redirectToAllowedSection(access);
+  return session;
 }
 
 export function redirectToAllowedSection(access: StaffAccess): never {

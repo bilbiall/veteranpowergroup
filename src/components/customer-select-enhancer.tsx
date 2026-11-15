@@ -49,11 +49,17 @@ export default function CustomerSelectEnhancer({ formSelector, sourceCustomerIds
       fields.append(label);
     }
 
+    const setCustomerFieldsEnabled = (enabled: boolean) => {
+      fields.hidden = !enabled;
+      for (const input of Array.from(fields.querySelectorAll<HTMLInputElement>("input"))) input.disabled = !enabled;
+    };
+    setCustomerFieldsEnabled(false);
+
     const syncSourceCustomer = () => {
       const sourceId = sourceSelect?.value ?? "";
       if (sourceId) {
         customerSelect.value = sourceCustomerIds[sourceId] ?? "";
-        fields.hidden = true;
+        setCustomerFieldsEnabled(false);
       }
     };
 
@@ -66,9 +72,9 @@ export default function CustomerSelectEnhancer({ formSelector, sourceCustomerIds
         form.querySelector<HTMLInputElement>('input[name="amount"]')?.removeAttribute("max");
       }
       if (customerSelect.value === "__new__") {
-        fields.hidden = false;
+        setCustomerFieldsEnabled(true);
       } else {
-        fields.hidden = true;
+        setCustomerFieldsEnabled(false);
       }
     });
     syncSourceCustomer();
