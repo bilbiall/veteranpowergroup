@@ -124,7 +124,7 @@ td { color: var(--ink); }
 .preview-company-brand { align-items: end; display: grid; gap: 12px; justify-items: end; }
   .preview-company-logo { background: transparent; height: auto; max-height: 62px; max-width: min(220px, 32vw); object-fit: contain; width: 220px; }
 .preview-type span { color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-.preview-type strong { font-family: var(--font-space-grotesk); font-size: 18px; }
+.preview-type strong { font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 700; }
 .preview-type small { color: var(--muted); font-size: 10px; }
 .preview-customer { display: grid; gap: 5px; margin: 26px 0 32px; }
 .preview-customer .eyebrow { margin: 0 0 4px; }
@@ -182,7 +182,7 @@ td { color: var(--ink); }
 .chart-panel .prototype-badge { background: #f1f2ef; color: var(--muted); }
 .dashboard-intro .dashboard-button { align-self: end; text-decoration: none; }
 .dashboard-nav a, .dashboard-nav-link { text-decoration: none; }
-@media (max-width: 760px) { .dashboard-shell { display: block; }.dashboard-content { width: 100%; }.mobile-dashboard-nav { align-items: center; background: var(--ink); display: flex; gap: 16px; overflow-x: auto; padding: 12px 18px; white-space: nowrap; }.mobile-dashboard-nav a, .mobile-dashboard-nav button { background: none; border: 0; color: var(--lime); font: inherit; font-size: 11px; padding: 5px 0; text-decoration: none; }.mobile-dashboard-nav form { margin-left: auto; }.prototype-form { grid-template-columns: 1fr; }.page-title { align-items: start; gap: 12px; }.page-title h1 { font-size: 31px; }.prototype-badge { font-size: 9px; }.dashboard-header { align-items: start; gap: 14px; }.dashboard-intro .dashboard-button { display: inline-flex; }.table-panel, .form-panel { padding: 18px; }.settings-list > div { grid-template-columns: 1fr; gap: 6px; }.export-panel, .document-detail-heading { align-items: start; flex-direction: column; }.export-actions { width: 100%; }.export-button { flex: 1; min-width: 90px; }.document-preview { padding: 21px 16px; }.preview-company { gap: 16px; }.preview-type strong { font-size: 14px; } }
+@media (max-width: 760px) { .dashboard-shell { display: block; }.dashboard-content { width: 100%; }.mobile-dashboard-nav { align-items: center; background: var(--ink); display: flex; gap: 16px; overflow-x: auto; padding: 12px 18px; white-space: nowrap; }.mobile-dashboard-nav a, .mobile-dashboard-nav button { background: none; border: 0; color: var(--lime); font: inherit; font-size: 11px; padding: 5px 0; text-decoration: none; }.mobile-dashboard-nav form { margin-left: auto; }.prototype-form { grid-template-columns: 1fr; }.page-title { align-items: start; gap: 12px; }.page-title h1 { font-size: 31px; }.prototype-badge { font-size: 9px; }.dashboard-header { align-items: start; gap: 14px; }.dashboard-intro .dashboard-button { display: inline-flex; }.table-panel, .form-panel { padding: 18px; }.settings-list > div { grid-template-columns: 1fr; gap: 6px; }.export-panel, .document-detail-heading { align-items: start; flex-direction: column; }.export-actions { width: 100%; }.export-button { flex: 1; min-width: 90px; }.document-preview { padding: 21px 16px; }.preview-company { gap: 16px; } }
 
 .solution-grid .service-card h3 { margin-top: 70px; }
 .solution-grid .service-card p { bottom: 55px; }

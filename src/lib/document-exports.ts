@@ -92,7 +92,7 @@ async function createWordDocument(document: ExportDocument) {
     ...(company?.address ? [new Paragraph(company.address)] : []),
     ...(companyContact.length ? [new Paragraph(companyContact.join(" · "))] : []),
     ...(company?.taxInformation ? [new Paragraph(`Tax information: ${company.taxInformation}`)] : []),
-    new Paragraph({ text: documentTitle(document), heading: HeadingLevel.TITLE, spacing: { before: 280, after: 100 } }),
+    new Paragraph({ text: documentTitle(document), heading: HeadingLevel.HEADING_2, spacing: { before: 280, after: 100 } }),
     new Paragraph({ text: documentDateSummary(document) }),
     new Paragraph({ text: "Bill to", heading: HeadingLevel.HEADING_3, spacing: { before: 240, after: 80 } }),
     new Paragraph({ children: [new TextRun({ text: document.customer.name, bold: true })] }),
@@ -254,7 +254,7 @@ async function createPdf(document: ExportDocument) {
     if (contact) pdf.text(contact);
     if (document.company.profile?.taxInformation) pdf.text(`Tax information: ${document.company.profile.taxInformation}`);
     pdf.image(companyLogoBytes(), 367, 38, { fit: [180, 65], align: "center", valign: "center" });
-    pdf.moveDown(1.6).fillColor("#202a27").font("Helvetica-Bold").fontSize(24).text(documentTitle(document));
+    pdf.moveDown(1.6).fillColor("#202a27").font("Helvetica-Bold").fontSize(17).text(documentTitle(document));
     pdf.moveDown(0.5).font("Helvetica").fontSize(10).fillColor("#68716c").text(documentDateSummary(document));
     pdf.moveDown(1.4).fillColor("#202a27").font("Helvetica-Bold").fontSize(11).text("Bill to");
     pdf.font("Helvetica-Bold").fontSize(10).text(document.customer.name);
