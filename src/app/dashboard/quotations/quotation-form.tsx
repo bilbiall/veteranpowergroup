@@ -6,7 +6,7 @@ import LineItemEditor from "@/components/line-item-editor";
 import { QUOTATION_INVOICE_TERMS } from "@/lib/document-terms";
 
 export default function QuotationForm({ customers, defaultTaxRate }: { customers: CustomerOption[]; defaultTaxRate: number }) {
-  return <form action={createQuotation} className="prototype-form" data-single-submit>
+  return <form action={createQuotation} className="prototype-form" data-single-submit data-confirm="Create this quotation? Please review the customer, terms, and line items. Confirm once to create one quotation.">
     <CustomerSelect customers={customers} />
     <label className="line-item-full-width">Terms<textarea name="terms" maxLength={8000} rows={4} defaultValue={QUOTATION_INVOICE_TERMS} /></label>
     <div className="line-item-full-width"><LineItemEditor defaultTaxRate={defaultTaxRate} /></div>
