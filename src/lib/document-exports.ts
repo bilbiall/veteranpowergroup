@@ -6,6 +6,7 @@ import {
   AlignmentType,
   BorderStyle,
   Document as WordDocument,
+  Footer,
   Header,
   HeadingLevel,
   HorizontalPositionRelativeFrom,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/document-export-data";
 import { companyKraPin, visibleDocumentPaymentDetails } from "@/lib/document-payment-details";
 import { RECEIPT_WARRANTY_HEADING, resolveDocumentTerms } from "@/lib/document-terms";
+import { documentFooterText } from "@/lib/document-footer";
 
 export type ExportFormat = "docx" | "xlsx" | "pdf";
 
@@ -122,9 +124,9 @@ async function createWordDocument(document: ExportDocument) {
     ...documentTerms(document).split("\n").map((line) => new Paragraph(line)),
     ...(document.type === "RECEIPT" ? [new Paragraph({ text: RECEIPT_WARRANTY_HEADING, heading: HeadingLevel.HEADING_3, spacing: { before: 180 } })] : []),
     ...(document.company.documents?.footer ? [new Paragraph({ text: document.company.documents.footer, spacing: { before: 300 } })] : []),
-    new Paragraph({ text: "Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.", spacing: { before: 300 } }),
   ];
 
+  const documentFooter = new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: documentFooterText, size: 16, color: "68716C" })] })] });
   const watermark = getWatermark();
   const watermarkData = Uint8Array.from(watermark);
   const watermarkHeader = new Header({
@@ -141,7 +143,7 @@ async function createWordDocument(document: ExportDocument) {
       },
     })] })],
   });
-  return Packer.toBuffer(new WordDocument({ sections: [{ headers: { default: watermarkHeader }, children: section }] }));
+  return Packer.toBuffer(new WordDocument({ sections: [{ headers: { default: watermarkHeader }, footers: { default: documentFooter }, children: section }] }));
 }
 
 async function createSpreadsheet(document: ExportDocument) {
@@ -151,6 +153,8 @@ async function createSpreadsheet(document: ExportDocument) {
   workbook.creator = document.company.profile?.name ?? "Veteran Power Solutions Limited";
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Document", { views: [{ state: "frozen", ySplit: 9 }] });
+  sheet.headerFooter.oddFooter = `&C${documentFooterText}     Page &P of &N`;
+  sheet.headerFooter.evenFooter = `&C${documentFooterText}     Page &P of &N`;
   sheet.columns = [
     { header: "Description", key: "description", width: 42 },
     { header: "Quantity", key: "quantity", width: 14 },
@@ -239,7 +243,7 @@ async function createPdf(document: ExportDocument) {
 
     const left = 48;
     const right = 547;
-    const pageBottom = 780;
+    const pageBottom = 730;
     const drawContinuationHeader = () => {
       pdf.image(companyLogoBytes(), 397, 34, { fit: [150, 54], align: "center", valign: "center" });
       pdf.fillColor("#24433a").font("Helvetica-Bold").fontSize(11).text(document.company.profile?.name ?? "Company details to be confirmed", left, 43);
@@ -334,11 +338,11 @@ async function createPdf(document: ExportDocument) {
     pdf.moveDown().font("Helvetica-Bold").text("Terms").font("Helvetica").text(documentTerms(document));
     if (document.type === "RECEIPT") pdf.moveDown(0.7).font("Helvetica-Bold").text(RECEIPT_WARRANTY_HEADING).font("Helvetica");
     if (document.company.documents?.footer) pdf.moveDown().text(document.company.documents.footer);
-    pdf.moveDown().fontSize(8).fillColor("#68716c").text("Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.");
     const pages = pdf.bufferedPageRange();
     for (let index = 0; index < pages.count; index += 1) {
       pdf.switchToPage(index);
-      pdf.fillColor("#68716c").font("Helvetica").fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 770, { width: right - left, align: "center", lineBreak: false });
+      pdf.fillColor("#68716c").font("Helvetica").fontSize(7).text(documentFooterText, left, 744, { width: right - left, align: "center", lineBreak: false });
+      pdf.fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 761, { width: right - left, align: "center", lineBreak: false });
     }
     pdf.end();
   });

@@ -146,7 +146,7 @@ td { color: var(--ink); }
 .preview-terms { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
 .preview-terms h2 { font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 500; }
 .preview-terms p, .preview-disclaimer { color: var(--muted); font-size: 11px; line-height: 1.6; }
-.preview-disclaimer { border-top: 1px solid var(--line); margin: 28px 0 0; padding-top: 15px; }
+.preview-disclaimer { border-top: 1px solid var(--line); display: block; font-size: 10px; margin: 28px 0 0; padding-top: 15px; text-align: center; }
 .prototype-form { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 15px; }
 .prototype-form label { color: var(--muted); display: grid; font-size: 11px; gap: 7px; }
 .prototype-form input, .prototype-form select { background: #fbfcfa; border: 1px solid var(--line); border-radius: 0; color: var(--ink); font: inherit; font-size: 13px; min-height: 42px; padding: 9px 11px; width: 100%; }

@@ -11,6 +11,7 @@ import { documentSection } from "@/lib/staff-sections";
 import { prisma } from "@/lib/prisma";
 import { companyKraPin, visibleDocumentPaymentDetails } from "@/lib/document-payment-details";
 import { RECEIPT_WARRANTY_HEADING, resolveDocumentTerms } from "@/lib/document-terms";
+import { documentFooterText } from "@/lib/document-footer";
 
 export default async function DocumentDetailPage({ params, searchParams }: PageProps<"/dashboard/documents/[id]">) {
   const { id } = await params;
@@ -78,7 +79,7 @@ export default async function DocumentDetailPage({ params, searchParams }: PageP
       {document.type === "INVOICE" && <p className="dashboard-note">Payments received: {money(paidAmount)} · Balance: {money(balance)}</p>}
       {receiptSummary && <section className="receipt-payment-summary"><strong>{receiptSummary.kind}</strong><span>Invoice total: {money(document.sourceDocument?.total ?? 0)}</span><span>Payment on this receipt: {money(document.payment?.amount ?? 0)}</span><span>Total paid to date: {money(receiptSummary.paidAtReceipt)}</span><span>Balance remaining: {money(receiptSummary.remaining)}</span></section>}
       <section className="preview-terms"><h2>Terms</h2><p>{terms}</p>{document.type === "RECEIPT" && <><h2>{RECEIPT_WARRANTY_HEADING}</h2></>}</section>
-      <p className="preview-disclaimer">Generated from the Veteran staff portal. Confirm company, tax, currency, and legal details before external use.</p>
+      <footer className="preview-disclaimer">{documentFooterText}</footer>
     </section>
     <section className="panel document-delete-panel"><div><p className="eyebrow">Document controls</p><h2>Delete this {documentTypeLabel(document.type).toLowerCase()}</h2>{deleteBlocked ? <p className="dashboard-note">This document has linked records or an eTIMS record and cannot be deleted yet.</p> : <p className="dashboard-note">Deleting also removes this document’s receipt payment record, if present.</p>}</div><form action={deleteDocumentRecord} data-single-submit data-confirm={`Delete ${documentTypeLabel(document.type).toLowerCase()} ${document.number}? This cannot be undone.`}><input type="hidden" name="documentId" value={document.id} /><button className="danger-button" type="submit" disabled={deleteBlocked}>Delete {documentTypeLabel(document.type).toLowerCase()}</button></form></section>
   </main>;
