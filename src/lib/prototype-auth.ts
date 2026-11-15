@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { firstAllowedHref, isStaffAccessKey, staffAccessKeys, type StaffAccessKey } from "@/lib/staff-sections";
+import { firstAllowedHref, isStaffAccessKey, reportAccessKeys, staffAccessKeys, type StaffAccessKey } from "@/lib/staff-sections";
 
 const cookieName = "northstar_staff_session";
 const sessionLifetimeSeconds = 60 * 60 * 8;
@@ -141,6 +141,10 @@ export async function getStaffAccess(userId: string): Promise<StaffAccess> {
   });
   const isAdmin = Boolean(user?.roles.some(({ role }) => role.name === adminRoleName));
   const sections = isAdmin ? [...staffAccessKeys] : (user?.sectionAccess ?? []).filter(isStaffAccessKey);
+  // Existing staff who had Reports before per-report access was introduced retain their prior visibility.
+  if (!isAdmin && sections.includes("reports") && !sections.some((key) => reportAccessKeys.includes(key as (typeof reportAccessKeys)[number]))) {
+    sections.push(...reportAccessKeys as StaffAccessKey[]);
+  }
   if (sections.includes("manage-staff") && !sections.includes("settings")) sections.push("settings");
   return { isAdmin, sections };
 }

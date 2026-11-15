@@ -16,6 +16,14 @@ export const staffSections = [
 export const staffPermissions = [
   { key: "company-profile", label: "Edit company profile", group: "Manage" },
   { key: "manage-staff", label: "Staff accounts", group: "Access" },
+  { key: "report-summary", label: "Reports summary", group: "Reports" },
+  { key: "report-findings", label: "Findings", group: "Reports" },
+  { key: "report-analytics", label: "Analytics", group: "Reports" },
+  { key: "report-prospects", label: "Prospects", group: "Reports" },
+  { key: "report-receipts", label: "Receipts", group: "Reports" },
+  { key: "report-quotations", label: "Quotations", group: "Reports" },
+  { key: "report-invoices", label: "Invoices", group: "Reports" },
+  { key: "report-audit-trail", label: "Login and change audit trail", group: "Reports" },
 ] as const;
 
 export type StaffSectionKey = (typeof staffSections)[number]["key"];
@@ -54,4 +62,11 @@ export function documentSection(type: string): StaffSectionKey | null {
 
 export function firstAllowedHref(access: readonly StaffAccessKey[]) {
   return staffSections.find((section) => access.includes(section.key))?.href ?? null;
+}
+
+export const reportAccessKeys = staffPermissions.filter(({ key }) => key.startsWith("report-")).map(({ key }) => key);
+export const allDataReportAccessKeys = ["report-summary", "report-analytics", "report-prospects", "report-receipts", "report-quotations", "report-invoices"] as const;
+
+export function canDownloadAllData(access: readonly StaffAccessKey[]) {
+  return allDataReportAccessKeys.every((key) => access.includes(key));
 }

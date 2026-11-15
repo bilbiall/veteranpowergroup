@@ -2,10 +2,12 @@ import { createStaffAccount, resetStaffPassword, setStaffStatus, updateCompanyPr
 import { prisma } from "@/lib/prisma";
 import { getStaffAccess, requireSectionAccess } from "@/lib/prototype-auth";
 import { defaultWhatsappMessage, defaultWhatsappNumber } from "@/lib/whatsapp";
-import { staffAccessGroups, staffAccessKeys, staffAccessLabels, type StaffAccessKey } from "@/lib/staff-sections";
+import { reportAccessKeys, staffAccessGroups, staffAccessKeys, staffAccessLabels, type StaffAccessKey } from "@/lib/staff-sections";
 
 function SectionCheckboxes({ selected = [] }: { selected?: readonly StaffAccessKey[] }) {
-  return <fieldset className="staff-sections"><legend className="sr-only">Staff portal access</legend>{staffAccessGroups.map(({ group, options }) => <div className="staff-section-group" key={group}><strong>{group}</strong>{options.map((option) => <label className="checkbox-label" key={option.key}><input type="checkbox" name="sections" value={option.key} defaultChecked={selected.includes(option.key)} />{option.label}</label>)}</div>)}</fieldset>;
+  const hasReportSelection = selected.some((key) => reportAccessKeys.includes(key as (typeof reportAccessKeys)[number]));
+  const effectiveSelection = selected.includes("reports") && !hasReportSelection ? [...selected, ...reportAccessKeys as StaffAccessKey[]] : selected;
+  return <fieldset className="staff-sections"><legend className="sr-only">Staff portal access</legend>{staffAccessGroups.map(({ group, options }) => <div className="staff-section-group" key={group}><strong>{group}</strong>{options.map((option) => <label className="checkbox-label" key={option.key}><input type="checkbox" name="sections" value={option.key} defaultChecked={effectiveSelection.includes(option.key)} />{option.label}</label>)}</div>)}</fieldset>;
 }
 
 function sectionSummary(keys: readonly string[]) {

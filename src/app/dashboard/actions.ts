@@ -10,7 +10,7 @@ import { hashStaffPassword, requirePrototypeAdminSession, requirePrototypeSessio
 import { getSchoolPaymentPlan } from "@/lib/school-payment-plans";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 import { isPortfolioMediaType } from "@/lib/portfolio-media";
-import { documentSection, isStaffAccessKey, isStaffSectionKey } from "@/lib/staff-sections";
+import { documentSection, isStaffAccessKey, isStaffSectionKey, reportAccessKeys } from "@/lib/staff-sections";
 import { defaultTermsForDocument, RECEIPT_TERMS } from "@/lib/document-terms";
 
 const staffAccountSchema = z.object({
@@ -36,6 +36,9 @@ function parseStaffSections(formData: FormData) {
   const sections = [...new Set(formData.getAll("sections"))];
   if (!sections.every(isStaffAccessKey)) return null;
   if (sections.includes("company-profile") && !sections.includes("settings")) sections.push("settings");
+  const reportPermissions = sections.filter((key) => reportAccessKeys.includes(key as (typeof reportAccessKeys)[number]));
+  if (reportPermissions.length && !sections.includes("reports")) sections.push("reports");
+  if (sections.includes("reports") && reportPermissions.length === 0) return null;
   return sections.some(isStaffSectionKey) ? sections : null;
 }
 
@@ -948,10 +951,13 @@ export async function resetStaffPassword(formData: FormData) {
 }
 
 export async function updateProspectStatus(formData: FormData) {
-  await requireSectionAccess("prospects");
+  const actor = await requireSectionAccess("prospects");
   const parsed = prospectStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/prospects?error=invalid");
-  await prisma.prospect.update({ where: { id: parsed.data.id }, data: { status: parsed.data.status } });
+  const previous = await prisma.prospect.findUnique({ where: { id: parsed.data.id }, select: { id: true, name: true, status: true } });
+  if (!previous) redirect("/dashboard/prospects?error=invalid");
+  const prospect = await prisma.prospect.update({ where: { id: parsed.data.id }, data: { status: parsed.data.status }, select: { id: true, name: true, status: true } });
+  await prisma.auditLog.create({ data: { actorId: actor.userId, action: "updated", entityType: "Prospect", entityId: prospect.id, summary: `Changed enquiry status for ${prospect.name} from ${previous.status} to ${prospect.status}`, metadata: { previousStatus: previous.status, newStatus: prospect.status } } });
   redirect("/dashboard/prospects?updated=1");
 }
 
@@ -965,10 +971,13 @@ export async function createFinding(formData: FormData) {
 }
 
 export async function updateFindingStatus(formData: FormData) {
-  await requireSectionAccess("findings");
+  const actor = await requireSectionAccess("findings");
   const parsed = findingStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/findings?error=invalid");
-  await prisma.finding.update({ where: { id: parsed.data.id }, data: { status: parsed.data.status } });
+  const previous = await prisma.finding.findUnique({ where: { id: parsed.data.id }, select: { id: true, title: true, status: true } });
+  if (!previous) redirect("/dashboard/findings?error=invalid");
+  const finding = await prisma.finding.update({ where: { id: parsed.data.id }, data: { status: parsed.data.status }, select: { id: true, title: true, status: true } });
+  await prisma.auditLog.create({ data: { actorId: actor.userId, action: "updated", entityType: "Finding", entityId: finding.id, summary: `Changed finding status for ${finding.title} from ${previous.status} to ${finding.status}`, metadata: { previousStatus: previous.status, newStatus: finding.status } } });
   redirect("/dashboard/findings?updated=1");
 }
 
@@ -1013,10 +1022,11 @@ export async function addPortfolioProjectMedia(formData: FormData) {
 }
 
 export async function setPortfolioProjectPublished(formData: FormData) {
-  await requireSectionAccess("portfolio");
+  const actor = await requireSectionAccess("portfolio");
   const parsed = portfolioProjectStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/portfolio?error=invalid");
-  await prisma.portfolioProject.update({ where: { id: parsed.data.id }, data: { isPublished: parsed.data.isPublished === "true" } });
+  const project = await prisma.portfolioProject.update({ where: { id: parsed.data.id }, data: { isPublished: parsed.data.isPublished === "true" }, select: { id: true, title: true, isPublished: true } });
+  await prisma.auditLog.create({ data: { actorId: actor.userId, action: "updated", entityType: "PortfolioProject", entityId: project.id, summary: `${project.isPublished ? "Published" : "Unpublished"} portfolio project ${project.title}`, metadata: { isPublished: project.isPublished } } });
   revalidatePath("/portfolio");
   redirect("/dashboard/portfolio?updated=1");
 }

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { getPrototypeSession, getStaffAccess } from "@/lib/prototype-auth";
+import { canDownloadAllData } from "@/lib/staff-sections";
 
 export const runtime = "nodejs";
 
@@ -19,11 +20,10 @@ export async function GET() {
   const session = await getPrototypeSession();
   if (!session) return Response.json({ error: "Authentication required" }, { status: 401 });
   const access = await getStaffAccess(session.userId);
-  if (!access.sections.includes("reports")) return Response.json({ error: "Access denied" }, { status: 403 });
+  if (!access.sections.includes("reports") || !canDownloadAllData(access.sections)) return Response.json({ error: "Access denied" }, { status: 403 });
 
-  const [prospects, findings, documents, pageViews, referralViews, totalViews] = await Promise.all([
+  const [prospects, documents, pageViews, referralViews, totalViews] = await Promise.all([
     prisma.prospect.findMany({ orderBy: { createdAt: "desc" } }),
-    prisma.finding.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.document.findMany({ where: { type: { in: ["RECEIPT", "QUOTATION", "INVOICE"] } }, include: { customer: true, items: { orderBy: { sortOrder: "asc" } }, payment: true }, orderBy: { createdAt: "desc" } }),
     prisma.websiteVisit.groupBy({ by: ["path"], _count: { _all: true }, orderBy: { path: "asc" } }),
     prisma.websiteVisit.groupBy({ by: ["referrer"], _count: { _all: true }, orderBy: { referrer: "asc" } }),
@@ -39,11 +39,10 @@ export async function GET() {
   const receipts = byType("RECEIPT");
   const currencyTotal = (records: typeof documents, currency: "KES" | "USD") => records.filter((document) => document.currency === currency).reduce((sum, document) => sum + document.total, 0);
 
-  addSheet(workbook, "Reports", ["Generated at", "Website page views", "Prospects", "Open findings", "Quotations", "Quotation value (KES)", "Quotation value (USD)", "Invoices", "Invoice value (KES)", "Invoice value (USD)", "Receipts", "Receipt value (KES)", "Receipt value (USD)"], [{
+  addSheet(workbook, "Reports", ["Generated at", "Website page views", "Prospects", "Quotations", "Quotation value (KES)", "Quotation value (USD)", "Invoices", "Invoice value (KES)", "Invoice value (USD)", "Receipts", "Receipt value (KES)", "Receipt value (USD)"], [{
     "Generated at": new Date(),
     "Website page views": totalViews,
     Prospects: prospects.length,
-    "Open findings": findings.filter((finding) => finding.status !== "RESOLVED").length,
     Quotations: quotations.length,
     "Quotation value (KES)": currencyTotal(quotations, "KES"),
     "Quotation value (USD)": currencyTotal(quotations, "USD"),
@@ -54,7 +53,6 @@ export async function GET() {
     "Receipt value (KES)": currencyTotal(receipts, "KES"),
     "Receipt value (USD)": currencyTotal(receipts, "USD"),
   }]);
-  addSheet(workbook, "Findings", ["Title", "Details", "Priority", "Status", "Created"], findings.map((finding) => ({ Title: finding.title, Details: finding.details, Priority: finding.priority, Status: finding.status, Created: finding.createdAt })));
   addSheet(workbook, "Analytics", ["Page", "Page views", "Referrer", "Referrer views"], Array.from({ length: Math.max(pageViews.length, referralViews.length) }, (_, index) => ({
     Page: pageViews[index]?.path ?? "",
     "Page views": pageViews[index]?._count._all ?? "",

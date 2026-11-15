@@ -4,7 +4,7 @@ import { CompanyBrand } from "@/components/company-brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardNavLink } from "@/components/dashboard-nav-link";
 import { publicSiteUrl } from "@/lib/surface-urls";
-import { firstAllowedHref, staffSectionGroups, type StaffAccessKey } from "@/lib/staff-sections";
+import { canDownloadAllData, firstAllowedHref, staffSectionGroups, type StaffAccessKey } from "@/lib/staff-sections";
 
 export function DashboardShell({ children, staff, sections }: { children: React.ReactNode; staff: { name: string; email: string }; sections: StaffAccessKey[] }) {
   const initials = staff.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
@@ -23,7 +23,7 @@ export function DashboardShell({ children, staff, sections }: { children: React.
         </nav>
         <div className="sidebar-bottom">
           <ThemeToggle />
-          {sections.includes("reports") && <a className="sidebar-download-all" href="/api/exports/all">↓ Download all data</a>}
+          {canDownloadAllData(sections) && <Link className="sidebar-download-all" href="/api/exports/all">↓ Download all data</Link>}
           <a href={publicSiteUrl}>← View public site</a>
           <form action={logout}><button className="sidebar-logout" type="submit">Sign out</button></form>
           <div className="user-chip"><span className="avatar">{initials}</span><span><b>{staff.name}</b><small>{staff.email}</small></span></div>
@@ -31,7 +31,7 @@ export function DashboardShell({ children, staff, sections }: { children: React.
       </aside>
       <nav className="mobile-dashboard-nav" aria-label="Staff navigation">
         {navGroups.flatMap(({ items }) => items).map(({ key, label, href }) => <DashboardNavLink href={href} label={label} compact key={key} />)}
-        {sections.includes("reports") && <a href="/api/exports/all">Download all</a>}
+        {canDownloadAllData(sections) && <Link href="/api/exports/all">Download all</Link>}
         <ThemeToggle />
         <form action={logout}><button type="submit">Sign out</button></form>
       </nav>
