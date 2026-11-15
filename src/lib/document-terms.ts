@@ -1,7 +1,7 @@
 import type { ExportDocument } from "@/lib/document-export-data";
 
 export const QUOTATION_INVOICE_TERMS = "Quotation valid while stocks last.\nQuote can be reviewed after 30 days";
-export const RECEIPT_TERMS = "Goods once bought can never be returned";
+export const RECEIPT_TERMS = "Goods once sold can never be returned.";
 export const RECEIPT_WARRANTY_HEADING = "Warranty";
 
 export function defaultTermsForDocument(type: ExportDocument["type"]) {
@@ -11,6 +11,8 @@ export function defaultTermsForDocument(type: ExportDocument["type"]) {
 export function resolveDocumentTerms(document: Pick<ExportDocument, "type" | "terms">) {
   const savedTerms = document.terms?.trim();
   const legacyPlaceholder = "Prototype terms — replace before use.";
+  const previousReceiptTerms = "Goods once bought can never be returned";
+  if (document.type === "RECEIPT" && savedTerms === previousReceiptTerms) return RECEIPT_TERMS;
   if (savedTerms && savedTerms !== legacyPlaceholder) return savedTerms;
   return defaultTermsForDocument(document.type);
 }
