@@ -2,11 +2,12 @@ import { z } from "zod";
 import { buildLetterheadExport, type LetterheadFormat } from "@/lib/letterhead-exports";
 import { getPrototypeSession, getStaffAccess } from "@/lib/prototype-auth";
 import { prisma } from "@/lib/prisma";
+import { letterPlainText, parseLetterHtml } from "@/lib/letter-rich-text";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  content: z.string().max(40000),
+  content: z.string().max(240000),
   format: z.enum(["docx", "xlsx", "pdf"]),
 });
 
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) return Response.json({ error: "Choose a format and keep letter content under 40,000 characters." }, { status: 400 });
+  const plainText = letterPlainText(parseLetterHtml(parsed.data.content));
+  if (plainText.length > 40000) return Response.json({ error: "Keep letter content under 40,000 characters." }, { status: 400 });
 
   const company = await prisma.companyProfile.findUnique({
     where: { companyId: 1 },

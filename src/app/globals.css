@@ -125,7 +125,14 @@ td { color: var(--ink); }
 .letterhead-company-details span { color: #68716c; }
 .letterhead-logo { background: transparent; flex: 0 0 auto; height: auto; max-height: 68px; max-width: min(220px, 38%); object-fit: contain; width: 220px; }
 .letterhead-rule { border-top: 1px solid #d5dcd6; margin: 23px 0 0; }
-.letter-writing-space { background: transparent; border: 0; color: #202a27; flex: 1; font: inherit; font-size: 14px; line-height: 1.8; margin: 0; min-height: 610px; outline-offset: 4px; padding: 28px 0; resize: vertical; width: 100%; }
+.letter-writing-toolbar { align-items: center; border-bottom: 1px solid #e4e8e4; display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 0; }
+.letter-writing-toolbar button, .letter-writing-toolbar select { background: #fff; border: 1px solid #d5dcd6; color: #202a27; font: inherit; font-size: 12px; min-height: 34px; padding: 6px 10px; }
+.letter-writing-toolbar button { cursor: pointer; min-width: 36px; }
+.letter-writing-toolbar button:hover, .letter-writing-toolbar select:focus-visible { border-color: #6a8231; }
+.letter-writing-toolbar span { color: #68716c; flex: 1 1 260px; font-size: 11px; }
+.letter-writing-space { background: transparent; border: 0; color: #202a27; flex: 1; font-size: 14px; line-height: 1.8; margin: 0; min-height: 610px; outline-offset: 4px; overflow-wrap: anywhere; padding: 28px 0; white-space: pre-wrap; width: 100%; }
+.letter-writing-space > *:first-child { margin-top: 0; }
+.letter-writing-space:empty::before { color: #9aa39d; content: "Write here, or paste formatted text from another app…"; pointer-events: none; }
 .letter-writing-space:focus { outline: 2px solid #d5e981; }
 .letterhead-footer { border-top: 1px solid #e4e8e4; color: #68716c; font-size: 9px; line-height: 1.5; margin-top: 16px; padding-top: 13px; text-align: center; }
 .letter-template-actions { display: flex; flex-wrap: wrap; gap: 10px; }
