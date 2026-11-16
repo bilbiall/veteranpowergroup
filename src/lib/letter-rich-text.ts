@@ -8,6 +8,9 @@ export type LetterTextRun = {
   fontFamily?: string;
   fontSize?: number;
   color?: string;
+  imageData?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 };
 
 export type LetterParagraph = {
@@ -19,6 +22,7 @@ type InlineStyle = Omit<LetterTextRun, "text">;
 type StackEntry = { tag: string; style: InlineStyle; alignment: LetterTextAlignment; skip: boolean };
 
 const blockTags = new Set(["p", "div", "li", "h1", "h2", "h3", "blockquote"]);
+const voidTags = new Set(["br", "img", "hr", "meta", "link", "input"]);
 const safeFamily = (value: string) => {
   const first = value.split(",")[0]?.replace(/["']/g, "").trim() ?? "";
   return first.length <= 120 && /^[\w\s()-]+$/.test(first) && !/url|expression|var\(/i.test(first) ? first : "";
@@ -103,6 +107,14 @@ function mergeRuns(runs: LetterTextRun[], text: string, style: InlineStyle) {
   else runs.push({ text, ...normalized });
 }
 
+function mergeImages(runs: LetterTextRun[], attributes: Record<string, string>) {
+  const src = attributes.src ?? "";
+  if (!/^data:image\/(?:png|jpe?g|gif|webp);base64,[\da-z+/=\s]+$/i.test(src) || src.length > 5_000_000) return;
+  const width = Math.min(600, Math.max(40, Number.parseInt(attributes.width ?? "600", 10) || 600));
+  const height = Math.min(900, Math.max(40, Number.parseInt(attributes.height ?? "300", 10) || 300));
+  runs.push({ text: "", imageData: src.replace(/\s/g, ""), imageWidth: width, imageHeight: height });
+}
+
 export function parseLetterHtml(html: string): LetterParagraph[] {
   const paragraphs: LetterParagraph[] = [];
   const stack: StackEntry[] = [];
@@ -134,11 +146,15 @@ export function parseLetterHtml(html: string): LetterParagraph[] {
       const tag = opening[1].toLowerCase();
       if (tag === "script" || tag === "style") skipped = true;
       const attributes = parseAttributes(opening[2]);
+      if (tag === "img") {
+        if (!skipped) mergeImages(runs, attributes);
+        continue;
+      }
       const parentAlignment = currentAlignment();
       if (blockTags.has(tag) && !skipped && runs.length) flush();
       const style = applyStyle(currentStyle(), tag, attributes);
       const alignment = readAlignment(tag, attributes, parentAlignment);
-      if (!/\/\s*>$/.test(token) && tag !== "br") stack.push({ tag, style, alignment, skip: skipped });
+      if (!voidTags.has(tag) && !/\/\s*>$/.test(token)) stack.push({ tag, style, alignment, skip: skipped });
       if (tag === "br" && !skipped) flush(true);
       continue;
     }
@@ -151,5 +167,5 @@ export function parseLetterHtml(html: string): LetterParagraph[] {
 }
 
 export function letterPlainText(paragraphs: LetterParagraph[]) {
-  return paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text).join("")).join("\n");
+  return paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text || (run.imageData ? "[image]" : "")).join("")).join("\n");
 }

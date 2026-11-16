@@ -7,13 +7,12 @@ import { letterPlainText, parseLetterHtml } from "@/lib/letter-rich-text";
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  content: z.string().max(240000),
-  format: z.enum(["docx", "xlsx", "pdf"]),
+  content: z.string().max(12_000_000),
+  format: z.enum(["docx", "pdf"]),
 });
 
 const contentTypes: Record<LetterheadFormat, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   pdf: "application/pdf",
 };
 

@@ -4,16 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 type LetterheadCompany = { name: string; address: string; email: string; phone: string; taxInformation: string };
-type LetterFormat = "docx" | "xlsx" | "pdf";
+type LetterFormat = "docx" | "pdf";
 
 const formats: { key: LetterFormat; label: string; extension: string }[] = [
   { key: "docx", label: "Download Word", extension: "docx" },
-  { key: "xlsx", label: "Download Excel", extension: "xlsx" },
   { key: "pdf", label: "Download PDF", extension: "pdf" },
 ];
 
 const fontChoices = ["Arial", "Aptos", "Calibri", "Cambria", "Courier New", "Georgia", "Tahoma", "Times New Roman", "Verdana"];
-const allowedTags = new Set(["P", "DIV", "BR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "SPAN", "FONT", "OL", "UL", "LI", "H1", "H2", "H3", "BLOCKQUOTE"]);
+const allowedTags = new Set(["P", "DIV", "BR", "IMG", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "SPAN", "FONT", "OL", "UL", "LI", "H1", "H2", "H3", "BLOCKQUOTE"]);
 
 function safeFontFamily(value: string) {
   const clean = value.replace(/["']/g, "").trim();
@@ -40,6 +39,15 @@ function cleanHtmlNode(node: Node, target: Document): Node | null {
 
   const htmlElement = node as HTMLElement;
   const clean = target.createElement(node.tagName.toLowerCase());
+  if (node.tagName === "IMG") {
+    const image = node as HTMLImageElement;
+    if (!/^data:image\/(?:png|jpe?g|gif);base64,[\da-z+/=\s]+$/i.test(image.src) || image.src.length > 3_000_000) return null;
+    clean.setAttribute("src", image.src.replace(/\s/g, ""));
+    clean.setAttribute("alt", image.alt.slice(0, 200));
+    clean.setAttribute("width", String(Math.min(600, Math.max(40, image.width || 600))));
+    clean.setAttribute("height", String(Math.min(900, Math.max(40, image.height || 300))));
+    return clean;
+  }
   const fontFace = node.getAttribute("face");
   const fontFamily = safeFontFamily(htmlElement.style.fontFamily || fontFace || "");
   const fontSize = htmlElement.style.fontSize.trim();
@@ -132,6 +140,32 @@ export default function LetterWriter({ company, draftKey }: { company: Letterhea
     updateContent();
   }
 
+  function command(name: string, value?: string) {
+    editorRef.current?.focus();
+    document.execCommand(name, false, value);
+    updateContent();
+  }
+
+  async function attachFiles(files: FileList | null) {
+    const editor = editorRef.current;
+    if (!editor || !files?.length) return;
+    if ([...files].some((file) => !["image/png", "image/jpeg", "image/gif"].includes(file.type) || file.size > 1_500_000)) {
+      setMessage("Attach PNG, JPEG, or GIF images up to 1.5 MB each.");
+      return;
+    }
+    for (const file of [...files]) {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Could not read the image attachment."));
+        reader.readAsDataURL(file);
+      });
+      editor.focus();
+      document.execCommand("insertHTML", false, `<img src="${data}" alt="${file.name.replace(/[&<>\"']/g, "")}" width="400" height="300"><br>`);
+    }
+    updateContent();
+  }
+
   function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
     event.preventDefault();
     const html = event.clipboardData.getData("text/html");
@@ -199,16 +233,29 @@ export default function LetterWriter({ company, draftKey }: { company: Letterhea
       <div className="letter-writing-toolbar" role="toolbar" aria-label="Text formatting">
         <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => formatSelection("bold")} aria-label="Bold"><strong>B</strong></button>
         <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => formatSelection("italic")} aria-label="Italic"><em>I</em></button>
+        <button type="button" onClick={() => command("underline")} aria-label="Underline"><u>U</u></button>
+        <label className="letter-tool-select">Size <select defaultValue="3" onChange={(event) => command("fontSize", event.target.value)}>{[[1,"8"],[2,"10"],[3,"12"],[4,"14"],[5,"18"],[6,"24"],[7,"36"]].map(([value,label]) => <option key={value} value={value}>{label} pt</option>)}</select></label>
         <label className="sr-only" htmlFor="letter-font">Font family</label>
         <select id="letter-font" defaultValue="" onChange={(event) => { changeFont(event.target.value); event.currentTarget.value = ""; }} aria-label="Font family">
           <option value="">Font family…</option>
           {fontChoices.map((font) => <option key={font} value={font}>{font}</option>)}
         </select>
+        <button type="button" onClick={() => command("justifyLeft")} aria-label="Align left">←</button>
+        <button type="button" onClick={() => command("justifyCenter")} aria-label="Align center">↔</button>
+        <button type="button" onClick={() => command("justifyRight")} aria-label="Align right">→</button>
+        <button type="button" onClick={() => command("insertUnorderedList")} aria-label="Bulleted list">• List</button>
+        <button type="button" onClick={() => command("insertOrderedList")} aria-label="Numbered list">1. List</button>
+        <button type="button" onClick={() => command("outdent")} aria-label="Decrease indent">Outdent</button>
+        <button type="button" onClick={() => command("indent")} aria-label="Increase indent">Indent</button>
+        <label className="letter-tool-select">Text color <input type="color" onChange={(event) => command("foreColor", event.target.value)} aria-label="Text color" /></label>
+        <label className="letter-tool-select letter-attach">Attach image<input type="file" accept="image/png,image/jpeg,image/gif" multiple onChange={(event) => { void attachFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
+        <button type="button" onClick={() => command("undo")} aria-label="Undo">Undo</button>
+        <button type="button" onClick={() => command("redo")} aria-label="Redo">Redo</button>
         <span>Paste formatted text from Word, email, or other apps to keep its styling.</span>
       </div>
       <label className="sr-only" htmlFor="letter-body">Write your letter, email, or agreement</label>
       <div id="letter-body" ref={editorRef} className="letter-writing-space" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Letter body" spellCheck onInput={updateContent} onPaste={handlePaste} />
-      <footer className="letterhead-footer">Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.</footer>
+      <footer className="letterhead-footer"><img src="/letter-contact-qr.png" alt="QR code to the contact section of the public website" /><span>Scan to connect</span><span className="letter-disclaimer">Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.</span></footer>
     </div>
     <div className="letter-template-actions" aria-label="Save and download letter">
       <button className="export-button" type="button" onClick={saveDraft}>Save draft</button>
