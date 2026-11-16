@@ -2,6 +2,7 @@ export const staffSections = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", group: "Workspace" },
   { key: "customers", label: "Customers", href: "/dashboard/customers", group: "Workspace" },
   { key: "prospects", label: "Customer enquiries", href: "/dashboard/prospects", group: "Workspace" },
+  { key: "letters", label: "Letter template", href: "/dashboard/letters", group: "Finance" },
   { key: "quotations", label: "Quotations", href: "/dashboard/quotations", group: "Finance" },
   { key: "invoices", label: "Invoices", href: "/dashboard/invoices", group: "Finance" },
   { key: "receipts", label: "Receipts", href: "/dashboard/receipts", group: "Finance" },
