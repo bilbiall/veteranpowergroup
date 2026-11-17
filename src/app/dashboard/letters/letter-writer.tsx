@@ -1,0 +1,268 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+
+type LetterheadCompany = { name: string; address: string; email: string; phone: string; taxInformation: string };
+type LetterFormat = "docx" | "pdf";
+
+const formats: { key: LetterFormat; label: string; extension: string }[] = [
+  { key: "docx", label: "Download Word", extension: "docx" },
+  { key: "pdf", label: "Download PDF", extension: "pdf" },
+];
+
+const fontChoices = ["Arial", "Aptos", "Calibri", "Cambria", "Courier New", "Georgia", "Tahoma", "Times New Roman", "Verdana"];
+const allowedTags = new Set(["P", "DIV", "BR", "IMG", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "SPAN", "FONT", "OL", "UL", "LI", "H1", "H2", "H3", "BLOCKQUOTE"]);
+
+function safeFontFamily(value: string) {
+  const clean = value.replace(/["']/g, "").trim();
+  return clean.length <= 120 && /^[\w\s,()-]+$/.test(clean) && !/url|expression|var\(/i.test(clean) ? clean : "";
+}
+
+function safeColor(value: string) {
+  const clean = value.trim();
+  return /^#[\da-f]{3,8}$/i.test(clean) || /^rgba?\([\d\s.,%]+\)$/i.test(clean) || /^[a-z]{3,20}$/i.test(clean) ? clean : "";
+}
+
+function cleanHtmlNode(node: Node, target: Document): Node | null {
+  if (node.nodeType === Node.TEXT_NODE) return target.createTextNode(node.textContent ?? "");
+  if (!(node instanceof Element)) return null;
+  if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "SVG", "MATH"].includes(node.tagName)) return null;
+  if (!allowedTags.has(node.tagName)) {
+    const fragment = target.createDocumentFragment();
+    for (const child of Array.from(node.childNodes)) {
+      const clean = cleanHtmlNode(child, target);
+      if (clean) fragment.append(clean);
+    }
+    return fragment;
+  }
+
+  const htmlElement = node as HTMLElement;
+  const clean = target.createElement(node.tagName.toLowerCase());
+  if (node.tagName === "IMG") {
+    const image = node as HTMLImageElement;
+    if (!/^data:image\/(?:png|jpe?g|gif);base64,[\da-z+/=\s]+$/i.test(image.src) || image.src.length > 3_000_000) return null;
+    clean.setAttribute("src", image.src.replace(/\s/g, ""));
+    clean.setAttribute("alt", image.alt.slice(0, 200));
+    clean.setAttribute("width", String(Math.min(600, Math.max(40, image.width || 600))));
+    clean.setAttribute("height", String(Math.min(900, Math.max(40, image.height || 300))));
+    return clean;
+  }
+  const fontFace = node.getAttribute("face");
+  const fontFamily = safeFontFamily(htmlElement.style.fontFamily || fontFace || "");
+  const fontSize = htmlElement.style.fontSize.trim();
+  const color = safeColor(htmlElement.style.color || node.getAttribute("color") || "");
+  const align = htmlElement.style.textAlign;
+  const weight = htmlElement.style.fontWeight;
+  const fontStyle = htmlElement.style.fontStyle;
+  const decoration = htmlElement.style.textDecorationLine || htmlElement.style.textDecoration;
+  const styles: string[] = [];
+  if (fontFamily) styles.push(`font-family:${fontFamily}`);
+  if (/^(\d+(\.\d+)?(pt|px|em|rem|%))$/i.test(fontSize)) styles.push(`font-size:${fontSize}`);
+  if (color) styles.push(`color:${color}`);
+  if (["left", "center", "right", "justify"].includes(align)) styles.push(`text-align:${align}`);
+  if (weight.toLowerCase() === "bold" || Number(weight) >= 600) styles.push("font-weight:bold");
+  if (/italic|oblique/i.test(fontStyle)) styles.push("font-style:italic");
+  if (/underline/i.test(decoration)) styles.push("text-decoration:underline");
+  if (styles.length) clean.setAttribute("style", styles.join(";"));
+  for (const child of Array.from(node.childNodes)) {
+    const sanitized = cleanHtmlNode(child, target);
+    if (sanitized) clean.append(sanitized);
+  }
+  return clean;
+}
+
+function sanitizeHtml(html: string) {
+  const source = new DOMParser().parseFromString(html, "text/html");
+  const output = document.implementation.createHTMLDocument("");
+  const fragment = output.createDocumentFragment();
+  for (const child of Array.from(source.body.childNodes)) {
+    const clean = cleanHtmlNode(child, output);
+    if (clean) fragment.append(clean);
+  }
+  const container = output.createElement("div");
+  container.append(fragment);
+  return container.innerHTML;
+}
+
+function pastePlainText(text: string) {
+  const temporary = document.createElement("div");
+  for (const [index, line] of text.split(/\r?\n/).entries()) {
+    if (index) temporary.append(document.createElement("br"));
+    temporary.append(document.createTextNode(line));
+  }
+  return temporary.innerHTML;
+}
+
+export default function LetterWriter({ company, draftKey }: { company: LetterheadCompany; draftKey: string }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [content, setContent] = useState("");
+  const [downloading, setDownloading] = useState<LetterFormat | null>(null);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(draftKey);
+    if (!saved || !editorRef.current) return;
+    const safe = sanitizeHtml(saved);
+    editorRef.current.innerHTML = safe;
+    setContent(safe);
+    setMessage("Saved draft restored from this browser.");
+  }, [draftKey]);
+
+  function updateContent() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const safe = sanitizeHtml(editor.innerHTML);
+    setContent(safe);
+    setMessage("");
+  }
+
+  function saveDraft() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const safe = sanitizeHtml(editor.innerHTML);
+    editor.innerHTML = safe;
+    setContent(safe);
+    window.localStorage.setItem(draftKey, safe);
+    setMessage("Draft saved in this browser.");
+  }
+
+  function formatSelection(command: "bold" | "italic") {
+    editorRef.current?.focus();
+    document.execCommand(command, false);
+    updateContent();
+  }
+
+  function changeFont(font: string) {
+    if (!font) return;
+    editorRef.current?.focus();
+    document.execCommand("fontName", false, font);
+    updateContent();
+  }
+
+  function command(name: string, value?: string) {
+    editorRef.current?.focus();
+    document.execCommand(name, false, value);
+    updateContent();
+  }
+
+  async function attachFiles(files: FileList | null) {
+    const editor = editorRef.current;
+    if (!editor || !files?.length) return;
+    if ([...files].some((file) => !["image/png", "image/jpeg", "image/gif"].includes(file.type) || file.size > 1_500_000)) {
+      setMessage("Attach PNG, JPEG, or GIF images up to 1.5 MB each.");
+      return;
+    }
+    for (const file of [...files]) {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Could not read the image attachment."));
+        reader.readAsDataURL(file);
+      });
+      editor.focus();
+      document.execCommand("insertHTML", false, `<img src="${data}" alt="${file.name.replace(/[&<>\"']/g, "")}" width="400" height="300"><br>`);
+    }
+    updateContent();
+  }
+
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const html = event.clipboardData.getData("text/html");
+    const text = event.clipboardData.getData("text/plain");
+    const fragmentHtml = sanitizeHtml(html || pastePlainText(text));
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || !editorRef.current) return;
+    const range = selection.getRangeAt(0);
+    if (!editorRef.current.contains(range.commonAncestorContainer)) return;
+    range.deleteContents();
+    const container = document.createElement("div");
+    container.innerHTML = fragmentHtml;
+    const fragment = document.createDocumentFragment();
+    let last: Node | null = null;
+    while (container.firstChild) {
+      last = container.firstChild;
+      fragment.append(container.firstChild);
+    }
+    range.insertNode(fragment);
+    if (last) {
+      range.setStartAfter(last);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    updateContent();
+  }
+
+  async function download(format: LetterFormat) {
+    setDownloading(format);
+    setMessage("");
+    try {
+      const response = await fetch("/api/letters/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, format }),
+      });
+      if (!response.ok) throw new Error("The letter could not be exported. Please try again.");
+      const file = await response.blob();
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Veteran-Power-Solutions-letter.${formats.find((item) => item.key === format)?.extension}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The letter could not be exported. Please try again.");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  return <section className="letter-template-workspace">
+    <div className="letterhead-sheet">
+      <header className="letterhead-preview">
+        <div className="letterhead-company-details">
+          <strong>{company.name}</strong>
+          {company.address && <span>{company.address}</span>}
+          <span>{[company.email, company.phone].filter(Boolean).join(" · ")}</span>
+          {company.taxInformation && <span>{company.taxInformation}</span>}
+        </div>
+        <Image className="letterhead-logo" src="/veteran-document-logo.png" alt="Veteran Power Solutions Limited logo" width={900} height={320} priority />
+      </header>
+      <div className="letterhead-rule" />
+      <div className="letter-writing-toolbar" role="toolbar" aria-label="Text formatting">
+        <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => formatSelection("bold")} aria-label="Bold"><strong>B</strong></button>
+        <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => formatSelection("italic")} aria-label="Italic"><em>I</em></button>
+        <button type="button" onClick={() => command("underline")} aria-label="Underline"><u>U</u></button>
+        <label className="letter-tool-select">Size <select defaultValue="3" onChange={(event) => command("fontSize", event.target.value)}>{[[1,"8"],[2,"10"],[3,"12"],[4,"14"],[5,"18"],[6,"24"],[7,"36"]].map(([value,label]) => <option key={value} value={value}>{label} pt</option>)}</select></label>
+        <label className="sr-only" htmlFor="letter-font">Font family</label>
+        <select id="letter-font" defaultValue="" onChange={(event) => { changeFont(event.target.value); event.currentTarget.value = ""; }} aria-label="Font family">
+          <option value="">Font family…</option>
+          {fontChoices.map((font) => <option key={font} value={font}>{font}</option>)}
+        </select>
+        <button type="button" onClick={() => command("justifyLeft")} aria-label="Align left">←</button>
+        <button type="button" onClick={() => command("justifyCenter")} aria-label="Align center">↔</button>
+        <button type="button" onClick={() => command("justifyRight")} aria-label="Align right">→</button>
+        <button type="button" onClick={() => command("insertUnorderedList")} aria-label="Bulleted list">• List</button>
+        <button type="button" onClick={() => command("insertOrderedList")} aria-label="Numbered list">1. List</button>
+        <button type="button" onClick={() => command("outdent")} aria-label="Decrease indent">Outdent</button>
+        <button type="button" onClick={() => command("indent")} aria-label="Increase indent">Indent</button>
+        <label className="letter-tool-select">Text color <input type="color" onChange={(event) => command("foreColor", event.target.value)} aria-label="Text color" /></label>
+        <label className="letter-tool-select letter-attach">Attach image<input type="file" accept="image/png,image/jpeg,image/gif" multiple onChange={(event) => { void attachFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
+        <button type="button" onClick={() => command("undo")} aria-label="Undo">Undo</button>
+        <button type="button" onClick={() => command("redo")} aria-label="Redo">Redo</button>
+        <span>Paste formatted text from Word, email, or other apps to keep its styling.</span>
+      </div>
+      <label className="sr-only" htmlFor="letter-body">Write your letter, email, or agreement</label>
+      <div id="letter-body" ref={editorRef} className="letter-writing-space" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Letter body" spellCheck onInput={updateContent} onPaste={handlePaste} />
+      <footer className="letterhead-footer"><img src="/letter-contact-qr.png" alt="QR code to the contact section of the public website" /><span>Scan to connect</span><span className="letter-disclaimer">Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.</span></footer>
+    </div>
+    <div className="letter-template-actions" aria-label="Save and download letter">
+      <button className="export-button" type="button" onClick={saveDraft}>Save draft</button>
+      {formats.map(({ key, label }) => <button className="export-button" type="button" key={key} onClick={() => void download(key)} disabled={downloading !== null}>
+        {downloading === key ? "Preparing…" : label}
+      </button>)}
+    </div>
+    {message && <p className="notice" role="status">{message}</p>}
+  </section>;
+}
