@@ -118,18 +118,21 @@ async function createPdf(content: string, company: LetterheadCompany) {
       for (const detail of companyDetails(company)) pdf.text(detail, left, undefined, { width: 320 });
       const ruleY = Math.max(pdf.y + 12, 105);
       pdf.save().strokeColor("#d5dcd6").lineWidth(0.8).moveTo(left, ruleY).lineTo(right, ruleY).stroke().restore();
-      pdf.y = 130;
+      pdf.y = 145;
     };
     drawContinuationHeader();
     const drawFooter = (page: number, total: number) => {
       const footerY = 756;
+      const bottomMargin = pdf.page.margins.bottom;
+      pdf.page.margins.bottom = 0;
       pdf.save().strokeColor("#e4e8e4").lineWidth(0.6).moveTo(left, footerY).lineTo(right, footerY).stroke().restore();
       pdf.image(qrBytes, left, footerY + 3, { fit: [42, 42] });
       pdf.fillColor("#68716c").font("Helvetica").fontSize(8).text("Scan to contact us", left + 50, footerY + 18, { width: 130, lineBreak: false });
       pdf.font("Helvetica").fontSize(7).text(documentFooterText, left, footerY + 52, { width: right - left, height: 18, lineBreak: false });
       pdf.font("Helvetica").fontSize(8).text(`Page ${page} of ${total}`, left, 828, { width: right - left, align: "center", lineBreak: false });
+      pdf.page.margins.bottom = bottomMargin;
     };
-    pdf.on("pageAdded", drawContinuationHeader);
+    pdf.y = 145;
     const paragraphs = parseLetterHtml(content);
     const body = paragraphs.length ? paragraphs : Array.from({ length: 22 }, () => ({ runs: [], alignment: "left" as const }));
     for (const paragraph of body) {
@@ -148,6 +151,7 @@ async function createPdf(content: string, company: LetterheadCompany) {
     const pages = pdf.bufferedPageRange();
     for (let page = 0; page < pages.count; page += 1) {
       pdf.switchToPage(page);
+      drawContinuationHeader();
       drawFooter(page + 1, pages.count);
     }
     pdf.end();
