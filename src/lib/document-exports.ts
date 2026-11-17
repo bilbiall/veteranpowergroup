@@ -37,6 +37,8 @@ export type ExportFormat = "docx" | "xlsx" | "pdf";
 
 const watermarkPath = path.join(process.cwd(), "public", "veteran-watermark.png");
 const getWatermark = () => readFileSync(watermarkPath);
+const contactQrPath = path.join(process.cwd(), "public", "letter-contact-qr.png");
+const getContactQr = () => readFileSync(contactQrPath);
 
 function documentTitle(document: ExportDocument) {
   return `${documentTypeLabel(document.type)} ${document.number}`;
@@ -235,6 +237,7 @@ async function createPdf(document: ExportDocument) {
   return new Promise<Buffer>((resolve, reject) => {
     const pdf = new PDFDocument({ size: "A4", margins: { top: 48, bottom: 125, left: 48, right: 48 }, bufferPages: true, info: { Title: documentTitle(document), Author: document.company.profile?.name ?? "Veteran Power Solutions Limited" } });
     const watermark = getWatermark();
+    const contactQr = getContactQr();
     const drawWatermark = () => {
       pdf.save().opacity(1).image(watermark, 66, 338, { fit: [463, 166], align: "center", valign: "center" }).restore();
     };
@@ -351,9 +354,11 @@ async function createPdf(document: ExportDocument) {
       const bottomMargin = pdf.page.margins.bottom;
       const currentY = pdf.y;
       pdf.page.margins.bottom = 0;
-      pdf.save().strokeColor("#e4e8e4").lineWidth(0.6).moveTo(left, 742).lineTo(right, 742).stroke().restore();
-      pdf.fillColor("#68716c").font("Helvetica").fontSize(7).text(documentFooterText, left, 751, { width: right - left, align: "center", lineBreak: false });
-      pdf.fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 768, { width: right - left, align: "center", lineBreak: false });
+      pdf.save().strokeColor("#e4e8e4").lineWidth(0.6).moveTo(left, 736).lineTo(right, 736).stroke().restore();
+      pdf.image(contactQr, left, 743, { fit: [38, 38] });
+      pdf.fillColor("#68716c").font("Helvetica").fontSize(8).text("Scan to contact us", left + 46, 756, { width: 160, lineBreak: false });
+      pdf.fontSize(7).text(documentFooterText, left, 785, { width: right - left, align: "center", lineBreak: false });
+      pdf.fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 803, { width: right - left, align: "center", lineBreak: false });
       pdf.page.margins.bottom = bottomMargin;
       pdf.y = currentY;
     }
