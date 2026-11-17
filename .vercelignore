@@ -2,6 +2,10 @@ All pics
 Invoice
 deploy
 deploy-db
+/.next-portal
+/.next-website
+/.local-pg
+/tmp
 *.db
 .run-both*.log
 prisma/sqlite-export.json
