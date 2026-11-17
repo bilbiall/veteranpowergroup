@@ -233,7 +233,7 @@ async function createSpreadsheet(document: ExportDocument) {
 
 async function createPdf(document: ExportDocument) {
   return new Promise<Buffer>((resolve, reject) => {
-    const pdf = new PDFDocument({ size: "A4", margin: 48, bufferPages: true, info: { Title: documentTitle(document), Author: document.company.profile?.name ?? "Veteran Power Solutions Limited" } });
+    const pdf = new PDFDocument({ size: "A4", margins: { top: 48, bottom: 125, left: 48, right: 48 }, bufferPages: true, info: { Title: documentTitle(document), Author: document.company.profile?.name ?? "Veteran Power Solutions Limited" } });
     const watermark = getWatermark();
     const drawWatermark = () => {
       pdf.save().opacity(1).image(watermark, 66, 338, { fit: [463, 166], align: "center", valign: "center" }).restore();
@@ -242,19 +242,22 @@ async function createPdf(document: ExportDocument) {
     pdf.on("data", (chunk: Buffer) => chunks.push(chunk));
     pdf.on("end", () => resolve(Buffer.concat(chunks)));
     pdf.on("error", reject);
-    pdf.on("pageAdded", drawWatermark);
     drawWatermark();
 
     const left = 48;
     const right = 547;
-    const pageBottom = 730;
+    const pageBottom = 717;
     const drawContinuationHeader = () => {
       pdf.image(companyLogoBytes(), 397, 34, { fit: [150, 54], align: "center", valign: "center" });
       pdf.fillColor("#24433a").font("Helvetica-Bold").fontSize(11).text(document.company.profile?.name ?? "Company details to be confirmed", left, 43);
       pdf.fillColor("#68716c").font("Helvetica").fontSize(9).text(`${documentTitle(document)} · continued`, left, 60);
       pdf.y = 92;
     };
-    const ensureSpace = (height: number) => { if (pdf.y + height > pageBottom) { pdf.addPage(); drawContinuationHeader(); } };
+    pdf.on("pageAdded", () => {
+      drawWatermark();
+      pdf.y = 92;
+    });
+    const ensureSpace = (height: number) => { if (pdf.y + height > pageBottom) pdf.addPage(); };
     pdf.fillColor("#24433a").font("Helvetica-Bold").fontSize(17).text(document.company.profile?.name ?? "Company details to be confirmed", left);
     pdf.fillColor("#68716c").font("Helvetica").fontSize(9);
     if (document.company.profile?.address) pdf.text(document.company.profile.address);
@@ -303,7 +306,6 @@ async function createPdf(document: ExportDocument) {
       const rowHeight = Math.max(28, descriptionHeight + 12);
       if (pdf.y + rowHeight > pageBottom) {
         pdf.addPage();
-        drawContinuationHeader();
         drawHeader();
       }
       const y = pdf.y;
@@ -345,8 +347,15 @@ async function createPdf(document: ExportDocument) {
     const pages = pdf.bufferedPageRange();
     for (let index = 0; index < pages.count; index += 1) {
       pdf.switchToPage(index);
-      pdf.fillColor("#68716c").font("Helvetica").fontSize(7).text(documentFooterText, left, 744, { width: right - left, align: "center", lineBreak: false });
-      pdf.fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 761, { width: right - left, align: "center", lineBreak: false });
+      if (index > 0) drawContinuationHeader();
+      const bottomMargin = pdf.page.margins.bottom;
+      const currentY = pdf.y;
+      pdf.page.margins.bottom = 0;
+      pdf.save().strokeColor("#e4e8e4").lineWidth(0.6).moveTo(left, 742).lineTo(right, 742).stroke().restore();
+      pdf.fillColor("#68716c").font("Helvetica").fontSize(7).text(documentFooterText, left, 751, { width: right - left, align: "center", lineBreak: false });
+      pdf.fontSize(8).text(`Page ${index + 1} of ${pages.count}`, left, 768, { width: right - left, align: "center", lineBreak: false });
+      pdf.page.margins.bottom = bottomMargin;
+      pdf.y = currentY;
     }
     pdf.end();
   });
