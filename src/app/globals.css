@@ -175,6 +175,10 @@ td { color: var(--ink); }
 .preview-terms h2 { font-family: var(--font-space-grotesk); font-size: 16px; font-weight: 500; }
 .preview-terms p, .preview-disclaimer { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .preview-disclaimer { border-top: 1px solid var(--line); display: block; font-size: 10px; margin: 28px 0 0; padding-top: 15px; text-align: center; }
+.preview-document-footer { align-items: center; border-top: 1px solid var(--line); column-gap: 12px; display: grid; grid-template-columns: 42px 1fr; margin-top: 28px; padding-top: 15px; }
+.preview-document-footer img { height: 42px; object-fit: contain; width: 42px; }
+.preview-document-footer-label { color: var(--muted); font-size: 10px; }
+.preview-document-footer .preview-disclaimer { border: 0; grid-column: 1 / -1; margin: 0; padding: 2px 0 0; }
 .prototype-form { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 15px; }
 .prototype-form label { color: var(--muted); display: grid; font-size: 11px; gap: 7px; }
 .prototype-form input, .prototype-form select { background: #fbfcfa; border: 1px solid var(--line); border-radius: 0; color: var(--ink); font: inherit; font-size: 13px; min-height: 42px; padding: 9px 11px; width: 100%; }
