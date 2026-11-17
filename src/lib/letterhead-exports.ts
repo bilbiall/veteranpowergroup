@@ -71,7 +71,7 @@ async function createWord(content: string, company: LetterheadCompany) {
   const footer = new Footer({ children: [new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [new TableRow({ children: [
-      new TableCell({ columnSpan: 2, children: [new Paragraph({ children: [new ImageRun({ type: "png", data: contactQr, transformation: { width: 42, height: 42 }, altText: { title: "Scan to connect", description: "Veteran Power Solutions contact page", name: "Contact QR code" } }), new TextRun({ text: "  Scan to connect", size: 12, color: "68716C" })] }), new Paragraph({ children: [new TextRun({ text: documentFooterText, size: 13, color: "68716C" })] })] }),
+      new TableCell({ columnSpan: 2, children: [new Paragraph({ children: [new ImageRun({ type: "png", data: contactQr, transformation: { width: 42, height: 42 }, altText: { title: "Scan to contact us", description: "Veteran Power Solutions contact page", name: "Contact QR code" } }), new TextRun({ text: "  Scan to contact us", size: 12, color: "68716C" })] }), new Paragraph({ children: [new TextRun({ text: documentFooterText, size: 13, color: "68716C" })] })] }),
     ] })],
     borders: { top: { style: "single", size: 4, color: "E4E8E4" }, bottom: { style: "none", size: 0, color: "FFFFFF" }, left: { style: "none", size: 0, color: "FFFFFF" }, right: { style: "none", size: 0, color: "FFFFFF" }, insideHorizontal: { style: "none", size: 0, color: "FFFFFF" }, insideVertical: { style: "none", size: 0, color: "FFFFFF" } },
   })] });
@@ -122,12 +122,12 @@ async function createPdf(content: string, company: LetterheadCompany) {
     };
     drawContinuationHeader();
     const drawFooter = (page: number, total: number) => {
-      const footerY = 765;
+      const footerY = 756;
       pdf.save().strokeColor("#e4e8e4").lineWidth(0.6).moveTo(left, footerY).lineTo(right, footerY).stroke().restore();
       pdf.image(qrBytes, left, footerY + 3, { fit: [42, 42] });
-      pdf.fillColor("#68716c").font("Helvetica").fontSize(8).text("Scan to connect", left + 48, footerY + 18, { width: 110, lineBreak: false });
-      pdf.font("Helvetica").fontSize(7).text(documentFooterText, left, footerY + 50, { width: right - left, height: 24, lineBreak: false });
-      pdf.font("Helvetica").fontSize(8).text(`Page ${page} of ${total}`, left, 813, { width: right - left, align: "center", lineBreak: false });
+      pdf.fillColor("#68716c").font("Helvetica").fontSize(8).text("Scan to contact us", left + 50, footerY + 18, { width: 130, lineBreak: false });
+      pdf.font("Helvetica").fontSize(7).text(documentFooterText, left, footerY + 52, { width: right - left, height: 18, lineBreak: false });
+      pdf.font("Helvetica").fontSize(8).text(`Page ${page} of ${total}`, left, 828, { width: right - left, align: "center", lineBreak: false });
     };
     pdf.on("pageAdded", drawContinuationHeader);
     const paragraphs = parseLetterHtml(content);

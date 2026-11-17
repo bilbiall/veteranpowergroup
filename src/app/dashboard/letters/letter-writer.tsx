@@ -255,7 +255,7 @@ export default function LetterWriter({ company, draftKey }: { company: Letterhea
       </div>
       <label className="sr-only" htmlFor="letter-body">Write your letter, email, or agreement</label>
       <div id="letter-body" ref={editorRef} className="letter-writing-space" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Letter body" spellCheck onInput={updateContent} onPaste={handlePaste} />
-      <footer className="letterhead-footer"><img src="/letter-contact-qr.png" alt="QR code to the contact section of the public website" /><span>Scan to connect</span><span className="letter-disclaimer">Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.</span></footer>
+      <footer className="letterhead-footer"><Image src="/letter-contact-qr.png" alt="QR code to the contact section of the public website" width={48} height={48} /><span>Scan to contact us</span><span className="letter-disclaimer">Generated from the Veteran Power Solutions Limited staff portal. Confirm company, tax, currency, and legal details before external use.</span></footer>
     </div>
     <div className="letter-template-actions" aria-label="Save and download letter">
       <button className="export-button" type="button" onClick={saveDraft}>Save draft</button>
