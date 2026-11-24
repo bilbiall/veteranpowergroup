@@ -1,3 +1,5 @@
+import "server-only";
+
 export const documentPaymentDetails = [
   { label: "Paybill Business No.", value: process.env.DOCUMENT_PAYBILL_BUSINESS_NO ?? "", breakBefore: false },
   { label: "Paybill Account No.", value: process.env.DOCUMENT_PAYBILL_ACCOUNT_NO ?? "", breakBefore: false },
