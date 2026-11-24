@@ -1,11 +1,12 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { firstAllowedHref, isStaffAccessKey, reportAccessKeys, staffAccessKeys, type StaffAccessKey } from "@/lib/staff-sections";
 
-const cookieName = "northstar_staff_session";
+const cookieName = env.NODE_ENV === "production" ? "__Host-northstar_staff_session" : "northstar_staff_session";
 const sessionLifetimeSeconds = 60 * 60 * 8;
 const adminRoleName = "Prototype administrator";
 const scryptKeyLength = 64;

@@ -20,6 +20,19 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "4mb",
     },
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
   // Files read from disk at runtime must be bundled into the serverless functions.
   outputFileTracingIncludes: {
     "/": ["./public/About-location/**", "./public/power-solutions/**", "./public/solar-solutions/**", "./public/borehole-solutions/**", "./public/project-reports/**"],
